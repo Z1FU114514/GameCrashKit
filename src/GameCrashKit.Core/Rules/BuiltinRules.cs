@@ -286,14 +286,14 @@ public static class BuiltinRules
             return new DiagnosisFinding(
                 RuleId: RuleId,
                 RuleVersion: RuleVersion,
-                Title: "引擎日志明确记录图形设备失去响应",
-                Statement: $"已确认的引擎日志中明确出现 {tokenText}。{extra4101} 驱动兼容性、游戏渲染管线异常、显存压力或显卡超频/降压不稳定均可能触发设备丢失，目前无法直接断言硬件损坏。",
+                Title: $"手选日志记录图形错误标记 ({tokenText})",
+                Statement: $"已确认的引擎日志中明确出现 {tokenText}。{extra4101} 驱动兼容性、游戏渲染管线异常、显存压力或显卡超频/降压不稳定均可能触发该标记，目前无法直接断言硬件损坏（且该标记本身不包含具体设备移除子原因）。",
                 Attribution: AttributionStrength.UserSelected,
                 EvidenceStrength: strength,
                 EvidenceIds: [$"engine-log:{log.Kind}"],
                 AmbiguityNotes: ambiguity,
                 NextActionTemplateId: "CHECK_GPU_OVERCLOCK_AND_OVERLAY",
-                NextActionText: "若开启了显卡超频/降压或高负载光追设置，建议先恢复默认频率与中画质复测，并临时关闭第三方游戏叠加层对照排查。",
+                NextActionText: "请先核对所选日志对应的游戏名与修改时间是否匹配本次闪退；确认后建议一次仅改动一个变量对照复测（例如先恢复显卡默认频率，或先临时关闭第三方游戏叠加层）。",
                 OfficialReferenceLabel: "Microsoft Direct3D 设备丢失说明",
                 OfficialReferenceUrl: "https://learn.microsoft.com/en-us/windows/uwp/gaming/handling-device-lost-scenarios",
                 SpecificityRank: SpecificityRank);
@@ -334,8 +334,27 @@ public static class BuiltinRules
                 evidenceIds.Add($"engine-log:{inc.ConfirmedEngineLog!.Kind}");
             }
 
-            var attribution = logOom && !codeOom ? AttributionStrength.UserSelected : AttributionStrength.Direct;
-            var strength = (logOom && inc.ConfirmedEngineLog!.IsTruncated && !codeOom)
+            if (!logOom)
+            {
+                // 0xe0000008 alone is a custom OOM exception code (e.g., Chromium/Electron); without an engine log, treat only as LimitedClue.
+                return new DiagnosisFinding(
+                    RuleId: RuleId,
+                    RuleVersion: RuleVersion,
+                    Title: "事件异常码 0xe0000008（常见于自定义内存不足语义）",
+                    Statement: "事件结构化字段记录到异常码 0xe0000008。该码常见于基于 Chromium/Electron 等运行时自主上报的内存分配失败，但对未知游戏本体无法单独断定确切原因。",
+                    Attribution: AttributionStrength.Direct,
+                    EvidenceStrength: EvidenceStrength.LimitedClue,
+                    EvidenceIds: evidenceIds,
+                    AmbiguityNotes: ["仅凭异常码缺少引擎或进程内存上下文，暂不能直接归因为系统页面文件或物理内存不足。"],
+                    NextActionTemplateId: "CHECK_OOM_CODE_WITH_LOG",
+                    NextActionText: "建议先核对程序是否内置 Chromium/启动器壳层，并手动关联对应游戏的引擎崩溃日志确认是否真正触发 OOM 后再决定后续排查。",
+                    OfficialReferenceLabel: null,
+                    OfficialReferenceUrl: null,
+                    SpecificityRank: SpecificityRank);
+            }
+
+            var attribution = !codeOom ? AttributionStrength.UserSelected : AttributionStrength.Direct;
+            var strength = inc.ConfirmedEngineLog!.IsTruncated && !codeOom
                 ? EvidenceStrength.LimitedClue
                 : EvidenceStrength.ExplicitRecord;
 
@@ -350,9 +369,7 @@ public static class BuiltinRules
                 RuleId: RuleId,
                 RuleVersion: RuleVersion,
                 Title: "记录到内存或显存资源耗尽信号",
-                Statement: logOom
-                    ? $"已确认的引擎日志记录到内存/显存分配失败信号（{inc.ConfirmedEngineLog!.OomToken ?? "OOM"}）。"
-                    : "事件结构化字段记录到资源不足异常码 0xe0000008。",
+                Statement: $"已确认的引擎日志记录到内存/显存分配失败信号（{inc.ConfirmedEngineLog!.OomToken ?? "OOM"}）。",
                 Attribution: attribution,
                 EvidenceStrength: strength,
                 EvidenceIds: evidenceIds,
@@ -381,24 +398,35 @@ public static class BuiltinRules
 
             var modFile = Path.GetFileName(inc.ModuleName.Trim());
             var isExplicitHook = ExplicitOverlayHookPrefixes.Any(p => modFile.StartsWith(p, StringComparison.OrdinalIgnoreCase));
-            var isLocalProxy = ProxyModuleNames.Contains(modFile) && !PathClassifier.IsWindowsSystemDirectoryPath(inc.ModulePath);
+            var isLocalProxy = ProxyModuleNames.Contains(modFile) &&
+                !string.IsNullOrWhiteSpace(inc.ModulePath) &&
+                !PathClassifier.IsWindowsSystemDirectoryPath(inc.ModulePath) &&
+                PathClassifier.IsInSameDirectoryOrSubtree(inc.ModulePath, inc.NormalizedAppPath);
 
             if (!isExplicitHook && !isLocalProxy)
             {
                 return null;
             }
 
+            var statement = isLocalProxy
+                ? $"事件记录故障模块路径位于游戏目录内的本地代理模块 {modFile}。该类 DLL 常见于本地注入或 Mod 加载器，但也有部分游戏本身附带或依赖它们，当前仅作为有限线索。"
+                : $"事件记录故障模块为已知第三方覆盖层或注入模块 {modFile}。该类模块常见于性能监控叠加层或录屏软件，但也有可能只是游戏异常调用的落点，当前仅作为有限线索。";
+
+            var nextAction = isLocalProxy
+                ? $"优先排查最近新增的 Mod 或外置插件；做对照隔离前请确认游戏目录内的 {modFile} 不是游戏本体必需文件，并保留原文件备份。"
+                : $"尝试从对应监控/录制软件界面中临时关闭叠加层功能（优先避免直接删改系统或游戏文件），观察闪退是否消失。";
+
             return new DiagnosisFinding(
                 RuleId: RuleId,
                 RuleVersion: RuleVersion,
                 Title: $"故障落点位于第三方注入或覆盖层模块 ({modFile})",
-                Statement: $"事件记录故障模块为 {modFile}。该类模块常见于性能监控叠加层、录屏软件或本地 Mod 加载器，但也有部分游戏或 Mod 正常依赖它们，当前仅作为有限线索。",
+                Statement: statement,
                 Attribution: AttributionStrength.Direct,
                 EvidenceStrength: EvidenceStrength.LimitedClue,
                 EvidenceIds: [inc.PrimaryEvidence.EvidenceId],
                 AmbiguityNotes: ["仅表明崩溃发生在该模块上下文内，不排除是游戏本体传入了异常状态。"],
                 NextActionTemplateId: "ISOLATE_OVERLAY_OR_PROXY_DLL",
-                NextActionText: $"尝试临时关闭对应叠加层软件（或对游戏目录下的本地加载器 {modFile} 做对照隔离测试），观察闪退是否消失。",
+                NextActionText: nextAction,
                 OfficialReferenceLabel: null,
                 OfficialReferenceUrl: null,
                 SpecificityRank: SpecificityRank);

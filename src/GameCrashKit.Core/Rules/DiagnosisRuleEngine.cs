@@ -21,11 +21,15 @@ public sealed class DiagnosisRuleEngine
     public DiagnosisReport Evaluate(
         RuleEvaluationContext context,
         IReadOnlyList<EvidenceItem> allEvidence,
-        string appVersion = "0.1.0-alpha",
+        string? appVersion = null,
         DateTimeOffset? generatedAtUtc = null)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(allEvidence);
+
+        var resolvedVersion = string.IsNullOrWhiteSpace(appVersion)
+            ? AppVersionInfo.Current
+            : appVersion.Trim();
 
         var rawFindings = new List<DiagnosisFinding>();
         foreach (var rule in _rules)
@@ -38,19 +42,22 @@ public sealed class DiagnosisRuleEngine
         }
 
         // Deduplicate by RuleId, sort ExplicitRecord facts before LimitedClue hints so low-strength clues never evict direct facts,
-        // then sort by SpecificityRank desc and RuleId ordinal asc, and cap at MaxPrimaryFindings (3).
-        var primaryFindings = rawFindings
+        // then sort by SpecificityRank desc and RuleId ordinal asc, cap primary findings at MaxPrimaryFindings (3),
+        // and preserve any remaining clues in AdditionalHints.
+        var orderedFindings = rawFindings
             .GroupBy(static f => f.RuleId, StringComparer.Ordinal)
             .Select(static g => g.First())
             .OrderBy(static f => StrengthSortOrder(f.EvidenceStrength))
             .ThenByDescending(static f => f.SpecificityRank)
             .ThenBy(static f => f.RuleId, StringComparer.Ordinal)
-            .Take(MaxPrimaryFindings)
             .ToList();
+
+        var primaryFindings = orderedFindings.Take(MaxPrimaryFindings).ToList();
+        var additionalHints = orderedFindings.Skip(MaxPrimaryFindings).ToList();
 
         return new DiagnosisReport(
             SchemaVersion: ReportSchemaVersion,
-            AppVersion: appVersion,
+            AppVersion: resolvedVersion,
             RulesetVersion: RulesetVersion,
             GeneratedAtUtc: generatedAtUtc ?? DateTimeOffset.UtcNow,
             ScanRequest: context.Request,
@@ -59,7 +66,8 @@ public sealed class DiagnosisRuleEngine
             SystemBackgroundEvents: context.SystemBackgroundEvents,
             Coverage: context.Coverage,
             Environment: context.Environment,
-            AllEvidence: allEvidence);
+            AllEvidence: allEvidence,
+            AdditionalHints: additionalHints);
     }
 
     private static int StrengthSortOrder(EvidenceStrength strength) => strength switch

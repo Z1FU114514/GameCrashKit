@@ -95,10 +95,16 @@ public static class EmergencyCardPngRenderer
             bodyStack.Children.Add(BuildFindingCard(finding));
         }
 
-        // 4. Optional Opt-in Scrubbed Excerpt
+        // 4. Optional Opt-in Structured Signal Summary
+        if (model.AdditionalHints is { Count: > 0 })
+        {
+            bodyStack.Children.Add(BuildSectionHeading("补充有限线索"));
+            bodyStack.Children.Add(BuildAdditionalHintsCard(model.AdditionalHints));
+        }
+
         if (model.HasOptInExcerpt && model.OptInScrubbedExcerptLines.Count > 0)
         {
-            bodyStack.Children.Add(BuildSectionHeading("三、附带脱敏报错摘要（用户预览确认）"));
+            bodyStack.Children.Add(BuildSectionHeading("三、附带受限结构化日志信号摘要（用户预览确认）"));
             bodyStack.Children.Add(BuildExcerptCard(model.OptInScrubbedExcerptLines));
         }
 
@@ -201,7 +207,7 @@ public static class EmergencyCardPngRenderer
 
         var right = new StackPanel();
         AddKvLine(right, "发生时间", model.TimestampDisplay);
-        AddKvLine(right, "路径后缀", model.DisambiguatedPathSuffix);
+        AddKvLine(right, "安装来源", model.DisambiguatedPathSuffix);
         AddKvLine(right, "窗口频次", model.OccurrenceSummary);
 
         Grid.SetColumn(left, 0);
@@ -287,6 +293,19 @@ public static class EmergencyCardPngRenderer
             LineHeight = 20
         });
 
+        if (finding.AmbiguityNotes is { Count: > 0 })
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text = "限制提示：" + string.Join(" ", finding.AmbiguityNotes),
+                FontFamily = CardFont,
+                FontSize = 12,
+                Foreground = WarningFg,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 6, 0, 0)
+            });
+        }
+
         stack.Children.Add(new Border
         {
             Background = NextActionBg,
@@ -305,6 +324,30 @@ public static class EmergencyCardPngRenderer
         });
 
         return CreateCardBorder(stack, new Thickness(0, 0, 0, 10));
+    }
+
+    private static Border BuildAdditionalHintsCard(IReadOnlyList<ShareFindingItem> hints)
+    {
+        var stack = new StackPanel();
+        foreach (var h in hints)
+        {
+            var tb = new TextBlock
+            {
+                FontFamily = CardFont,
+                FontSize = 12.5,
+                Foreground = TextPrimary,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 5)
+            };
+            tb.Inlines.Add(new System.Windows.Documents.Run($"[{h.RuleTag}] {h.Title}（{h.EvidenceStrengthText}）：")
+            {
+                FontWeight = FontWeights.SemiBold
+            });
+            tb.Inlines.Add(new System.Windows.Documents.Run($"{h.Statement} 建议：{h.NextActionText}"));
+            stack.Children.Add(tb);
+        }
+
+        return CreateCardBorder(stack, new Thickness(0, 0, 0, 14));
     }
 
     private static Border BuildExcerptCard(IReadOnlyList<string> lines)

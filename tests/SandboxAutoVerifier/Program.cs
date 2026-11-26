@@ -182,14 +182,18 @@ internal static class Program
             reportWithLog = coordinator.BuildDiagnosisReport(
                 scanSession,
                 syntheticIncident,
-                confirmedLog,
-                options.ExpectedVersion);
+                confirmedLog);
 
             var reportWithoutLog = coordinator.BuildDiagnosisReport(
                 scanSession,
                 syntheticIncident,
-                confirmedEngineLog: null,
-                options.ExpectedVersion);
+                confirmedEngineLog: null);
+
+            var versionMatch = string.Equals(reportWithLog.AppVersion, options.ExpectedVersion, StringComparison.OrdinalIgnoreCase);
+            recorder.Record(
+                "Check3b.ReportVersionConsistency",
+                versionMatch,
+                $"ReportAppVersion={reportWithLog.AppVersion}, Expected={options.ExpectedVersion}");
 
             var firedWithLog = reportWithLog.PrimaryFindings
                 .Select(f => $"{f.RuleId}@{f.RuleVersion}")
@@ -268,6 +272,8 @@ internal static class Program
 
         var appExe = Path.Combine(options.AppDir, "GameCrashKit.App.exe");
         var appExists = File.Exists(appExe);
+        var productVersion = appExists ? FileVersionInfo.GetVersionInfo(appExe).ProductVersion ?? string.Empty : string.Empty;
+        var exeVersionMatch = productVersion.StartsWith(options.ExpectedVersion, StringComparison.OrdinalIgnoreCase);
         var leakedFiles = Directory.Exists(options.AppDir)
             ? Directory.EnumerateFiles(options.AppDir, "*", SearchOption.AllDirectories)
                 .Select(Path.GetFileName)
@@ -279,8 +285,8 @@ internal static class Program
 
         recorder.Record(
             "Check1b.CleanPortableArtifact",
-            appExists && leakedFiles.Length == 0,
-            $"AppDir={options.AppDir}, ExeExists={appExists}, LeakedTestBinaries=[{string.Join(", ", leakedFiles)}]");
+            appExists && exeVersionMatch && leakedFiles.Length == 0,
+            $"AppDir={options.AppDir}, ExeExists={appExists}, ProductVersion={productVersion}, ExpectedPrefix={options.ExpectedVersion}, LeakedTestBinaries=[{string.Join(", ", leakedFiles)}]");
     }
 
     private static UserConfirmedEngineLog? VerifyReadOnlySampleLog(string sampleLogPath, CheckRecorder recorder)

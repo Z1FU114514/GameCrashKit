@@ -1,0 +1,9 @@
+Mono path[0] = 'D:/Games/SteamLibrary/steamapps/common/SampleUnityGame/SampleUnityGame_Data/Managed'
+Initialize engine version: 2022.3.20f1c1 (1234567890ab)
+GfxDevice: creating device client; threaded=1; jobified=1
+Direct3D:
+    Version:  Direct3D 11.0 [level 11.1]
+    Renderer: Sample GPU Adapter
+d3d11: failed to lock buffer 00000210AABBCCDD of size 65536 [0x887A0005].
+D3D11: Failed to create RenderTexture, error DXGI_ERROR_DEVICE_REMOVED
+Crash!!!

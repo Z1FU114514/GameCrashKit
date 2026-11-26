@@ -22,7 +22,7 @@ public static class MarkdownReportExporter
         sb.Append($"- **故障模块**: `{model.ModuleName}`\n");
         sb.Append($"- **异常代码**: `{model.ExceptionCode}`\n");
         sb.Append($"- **发生时间**: {model.TimestampDisplay}\n");
-        sb.Append($"- **路径后缀**: `{model.DisambiguatedPathSuffix}`\n");
+        sb.Append($"- **安装来源**: `{model.DisambiguatedPathSuffix}`\n");
         sb.Append($"- **窗口频次**: {model.OccurrenceSummary}\n\n");
 
         sb.Append("## 2. 诊断结论与下一步建议\n");
@@ -37,13 +37,27 @@ public static class MarkdownReportExporter
                 sb.Append($"### [{f.RuleTag}] {f.Title}\n");
                 sb.Append($"- **可信度刻度**: `{f.AttributionText}` | `{f.EvidenceStrengthText}`\n");
                 sb.Append($"- **结论**: {f.Statement}\n");
+                if (f.AmbiguityNotes is { Count: > 0 })
+                {
+                    sb.Append($"- **限制提示**: {string.Join(" ", f.AmbiguityNotes)}\n");
+                }
                 sb.Append($"- **下一步**: {f.NextActionText}\n\n");
             }
         }
 
+        if (model.AdditionalHints is { Count: > 0 })
+        {
+            sb.Append("### 补充有限线索（超出主结论 3 条上限）\n");
+            foreach (var h in model.AdditionalHints)
+            {
+                sb.Append($"- **[{h.RuleTag}] {h.Title}**（{h.AttributionText} | {h.EvidenceStrengthText}）：{h.Statement} 建议：{h.NextActionText}\n");
+            }
+            sb.Append('\n');
+        }
+
         if (model.HasOptInExcerpt && model.OptInScrubbedExcerptLines.Count > 0)
         {
-            sb.Append("## 3. 附带脱敏报错摘要（用户预览确认）\n");
+            sb.Append("## 3. 附带受限结构化日志信号摘要（用户预览确认）\n");
             sb.Append("```text\n");
             foreach (var line in model.OptInScrubbedExcerptLines)
             {

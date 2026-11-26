@@ -14,7 +14,8 @@ public sealed record ShareFindingItem(
     string EvidenceStrengthText,
     EvidenceStrength EvidenceStrength,
     string Statement,
-    string NextActionText);
+    string NextActionText,
+    IReadOnlyList<string>? AmbiguityNotes = null);
 
 public sealed record ShareEnvironmentItem(
     string Label,
@@ -44,4 +45,5 @@ public sealed record ShareReportModel(
     IReadOnlyList<string> CoverageSummaryLines,
     bool HasAvailableExcerptSource,
     bool HasOptInExcerpt,
-    IReadOnlyList<string> OptInScrubbedExcerptLines);
+    IReadOnlyList<string> OptInScrubbedExcerptLines,
+    IReadOnlyList<ShareFindingItem>? AdditionalHints = null);

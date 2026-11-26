@@ -15,6 +15,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DarkTitleBarHelper.Apply(this);
+        ClampToWorkArea();
         _viewModel = new MainViewModel();
         DataContext = _viewModel;
 
@@ -24,6 +25,20 @@ public partial class MainWindow : Window
         InputBindings.Add(new KeyBinding(new RelayCommand(OpenSharePreview), new KeyGesture(Key.E, ModifierKeys.Control)));
 
         Closed += (_, _) => _viewModel.Dispose();
+    }
+
+    private void ClampToWorkArea()
+    {
+        var workArea = SystemParameters.WorkArea;
+        if (workArea.Width > 0 && Width > workArea.Width - 20)
+        {
+            Width = Math.Max(MinWidth, workArea.Width - 20);
+        }
+
+        if (workArea.Height > 0 && Height > workArea.Height - 20)
+        {
+            Height = Math.Max(MinHeight, workArea.Height - 20);
+        }
     }
 
     private void SelectManualLogButton_Click(object sender, RoutedEventArgs e)
@@ -43,7 +58,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        var vm = new SharePreviewViewModel(_viewModel.CurrentReport);
+        var vm = new SharePreviewViewModel(
+            _viewModel.CurrentReport,
+            attachedSourceLogFullPath: _viewModel.ActiveAttachedEngineLogFullPath);
         var win = new SharePreviewWindow(vm)
         {
             Owner = this
@@ -56,7 +73,7 @@ public partial class MainWindow : Window
         var dialog = new OpenFileDialog
         {
             Title = "选择单个游戏崩溃日志（仅读取末尾 2 MiB，纯本地只读）",
-            Filter = "日志文件 (*.log;*.txt;*.xml)|*.log;*.txt;*.xml|所有文件 (*.*)|*.*",
+            Filter = "游戏崩溃日志 (*.log;*.txt;*.xml;*.runtime-xml)|*.log;*.txt;*.xml;*.runtime-xml|所有文件 (*.*)|*.*",
             Multiselect = false,
             CheckFileExists = true,
             DereferenceLinks = false

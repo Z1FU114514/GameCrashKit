@@ -6,11 +6,16 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$semver = $VersionLabel.TrimStart('v')
+if ([string]::IsNullOrWhiteSpace($semver)) {
+    throw "Invalid VersionLabel '$VersionLabel': resolved semver is empty."
+}
+
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Push-Location $repoRoot
 try {
-    Write-Host "=== 1. Building GameCrashKit.sln (Release) ===" -ForegroundColor Cyan
-    dotnet build "GameCrashKit.sln" -c Release
+    Write-Host "=== 1. Building GameCrashKit.sln (Release, Version=$semver) ===" -ForegroundColor Cyan
+    dotnet build "GameCrashKit.sln" -c Release -p:Version=$semver
     if ($LASTEXITCODE -ne 0) { throw "dotnet build failed with exit code $LASTEXITCODE" }
 
     if (-not $SkipTests) {
@@ -28,14 +33,21 @@ try {
         Remove-Item $publishDir -Recurse -Force
     }
 
-    Write-Host "=== 3. Publishing Self-Contained Win-x64 Portable Package ===" -ForegroundColor Cyan
+    Write-Host "=== 3. Publishing Self-Contained Win-x64 Portable Package (Version=$semver) ===" -ForegroundColor Cyan
     dotnet publish "src\GameCrashKit.App\GameCrashKit.App.csproj" `
         -c Release `
         -r win-x64 `
         --self-contained true `
         -p:PublishTrimmed=false `
+        -p:Version=$semver `
         -o $publishDir
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed with exit code $LASTEXITCODE" }
+
+    $appExePath = Join-Path $publishDir "GameCrashKit.App.exe"
+    $productVer = (Get-Item $appExePath).VersionInfo.ProductVersion
+    if (-not $productVer -or -not $productVer.StartsWith($semver, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "FATAL: Published GameCrashKit.App.exe ProductVersion '$productVer' does not start with expected '$semver'"
+    }
 
     # Ensure dev/test tools never leak into user release packages
     $leakedTools = Get-ChildItem -Path $publishDir -ErrorAction SilentlyContinue |

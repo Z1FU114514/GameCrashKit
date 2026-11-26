@@ -139,29 +139,71 @@ public sealed class PrivacyAndShareExporterTests
     }
 
     [Fact]
-    public void OptInScrubbedExcerpt_ScrubsAllSecretsAndEnforcesLineAndCharCaps()
+    public void OptInScrubbedExcerpt_EmitsOnlyFixedSignalTemplatesAndScrubberRedactsEdgeSecrets()
     {
         var (report, context) = BuildHostileReport();
 
         var share = ShareReportProjector.Project(
             report,
-            new ShareOptions(IncludeScrubbedErrorExcerpt: true),
+            new ShareOptions(HideExactTimestamp: true, IncludeScrubbedErrorExcerpt: true),
             context,
             TimeZoneInfo.Utc);
         var md = MarkdownReportExporter.Render(share);
 
         Assert.True(share.HasOptInExcerpt);
-        Assert.InRange(share.OptInScrubbedExcerptLines.Count, 1, PrivacyScrubber.MaxExcerptLines);
-        Assert.True(share.OptInScrubbedExcerptLines.Sum(static l => l.Length) <= PrivacyScrubber.MaxExcerptTotalChars);
-
+        Assert.Contains("日志类型: Unity", md);
+        Assert.Contains("DXGI_ERROR_DEVICE_REMOVED", md);
+        // Raw free-text log lines must stay strictly local even when opt-in signal summary is enabled.
+        Assert.DoesNotContain("Line 5 kept", md);
+        Assert.DoesNotContain("Line 6 MUST BE DROPPED", md);
         AssertContainsZeroSecrets(md);
-        Assert.Contains("<USER_HOME>", md);
-        Assert.Contains("<PC_NAME>", md);
-        Assert.Contains("<SID>", md);
-        Assert.Contains("<IP>", md);
-        Assert.Contains("<EMAIL>", md);
-        Assert.Contains("<STEAM_ID>", md);
-        Assert.Contains("<REDACTED>", md);
+
+        var edgeContext = new ScrubContext("张三", "X", @"C:\Users\张三");
+        var edgeRaw = "host X account=\"player_99\" token='tok-abc-123' [U:1:987654] on C:\\Users\\张三\\Desktop\\run.log at 20:18:04.123 for 张三";
+        var edgeScrubbed = PrivacyScrubber.ScrubText(edgeRaw, edgeContext, scrubIpv4: true, hideTimestamps: true);
+
+        Assert.DoesNotContain("张三", edgeScrubbed);
+        Assert.DoesNotContain("tok-abc-123", edgeScrubbed);
+        Assert.DoesNotContain("player_99", edgeScrubbed);
+        Assert.DoesNotContain("[U:1:987654]", edgeScrubbed);
+        Assert.DoesNotContain("20:18:04", edgeScrubbed);
+        Assert.Contains("<PC_NAME>", edgeScrubbed);
+        Assert.Contains("<STEAM_ID>", edgeScrubbed);
+        Assert.Contains("<TIME>", edgeScrubbed);
+    }
+
+    [Fact]
+    public void DefaultWhitelistAndHideApp_ScrubsPrivateFolderLanIpAndSameNameModule()
+    {
+        var (report, context) = BuildHostileReport();
+        var incWithPrivateDir = report.SelectedIncident! with
+        {
+            AppName = "ReviewGame.exe",
+            ModuleName = "ReviewGame.exe",
+            NormalizedAppPath = @"D:\QA-Family\Game\ReviewGame.exe",
+            DisambiguatedPathSuffix = @"...\QA-Family\Game\ReviewGame.exe"
+        };
+        var privateReport = report with { SelectedIncident = incWithPrivateDir };
+
+        // Default share: never exposes arbitrary private folder names like QA-Family.
+        var defaultShare = ShareReportProjector.Project(privateReport, new ShareOptions(), context, TimeZoneInfo.Utc);
+        var defaultMd = MarkdownReportExporter.Render(defaultShare);
+        Assert.DoesNotContain("QA-Family", defaultMd, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("独立游戏目录", defaultShare.DisambiguatedPathSuffix);
+
+        // HideAppName: also masks matching ModuleName and App stem in findings/summaries.
+        var hiddenShare = ShareReportProjector.Project(
+            privateReport,
+            new ShareOptions(HideAppName: true, HideExactTimestamp: true, IncludeScrubbedErrorExcerpt: false),
+            context,
+            TimeZoneInfo.Utc);
+        var hiddenMd = MarkdownReportExporter.Render(hiddenShare);
+
+        Assert.Equal("<APP>", hiddenShare.AppDisplayName);
+        Assert.Equal("<APP_MODULE>", hiddenShare.ModuleName);
+        Assert.Equal("<已隐藏>", hiddenShare.DisambiguatedPathSuffix);
+        Assert.DoesNotContain("ReviewGame", hiddenMd, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("10:27:45", hiddenMd);
     }
 
     [Fact]

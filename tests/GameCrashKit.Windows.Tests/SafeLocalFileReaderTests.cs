@@ -83,13 +83,59 @@ public sealed class SafeLocalFileReaderTests
         try
         {
             var badPath = Path.Combine(tempDir.FullName, "ansi_gbk.log");
-            // Invalid UTF-8 sequence (lone high bytes)
-            File.WriteAllBytes(badPath, [0xFF, 0xFE, 0xC4, 0xE3, 0xBA, 0xC3]);
+            // Invalid UTF-8 bytes without any UTF-16 BOM (GBK "你好")
+            File.WriteAllBytes(badPath, [0xC4, 0xE3, 0xBA, 0xC3]);
 
             var result = SafeLocalFileReader.ReadTailUtf8(badPath);
 
             Assert.False(result.Success);
             Assert.Equal(SafeFileReadErrorKind.InvalidUtf8Encoding, result.ErrorKind);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ReadTailUtf8_Utf16LeWithBom_DecodesAccurately()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("gck_utf16_");
+        try
+        {
+            var path = Path.Combine(tempDir.FullName, "utf16.log");
+            var payload = Encoding.Unicode.GetPreamble()
+                .Concat(Encoding.Unicode.GetBytes("Initialize engine version: 2022.3.20f1c1\n中文崩溃测试"))
+                .ToArray();
+            File.WriteAllBytes(path, payload);
+
+            var result = SafeLocalFileReader.ReadTailUtf8(path);
+
+            Assert.True(result.Success, result.ErrorMessage);
+            Assert.NotNull(result.Content);
+            Assert.Contains("Initialize engine version: 2022.3.20f1c1", result.Content);
+            Assert.Contains("中文崩溃测试", result.Content);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void LoadAndParseUserSelectedFile_TruncatedRuntimeXml_RejectsWithoutGenericFallback()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("gck_trunc_xml_");
+        try
+        {
+            var xmlPath = Path.Combine(tempDir.FullName, "CrashContext.runtime-xml");
+            var filler = new string('A', SafeLocalFileReader.MaxTailReadBytes + 1024);
+            File.WriteAllText(xmlPath, $"<FGenericCrashContext><ErrorMessage>{filler}</ErrorMessage></FGenericCrashContext>");
+
+            var result = EngineLogDiscovery.LoadAndParseUserSelectedFile(xmlPath);
+
+            Assert.False(result.Success);
+            Assert.Contains("不完整", result.ErrorMessage);
         }
         finally
         {

@@ -1,10 +1,13 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using GameCrashKit.App.ViewModels;
 using GameCrashKit.App.Views;
+using GameCrashKit.Core.Correlation;
 using GameCrashKit.Core.Models;
 using GameCrashKit.Core.Rules;
+using GameCrashKit.Windows.Scanning;
 using Xunit;
 
 namespace GameCrashKit.App.Tests;
@@ -12,6 +15,7 @@ namespace GameCrashKit.App.Tests;
 public sealed class MainWindowLayoutTests
 {
     [Theory]
+    [InlineData(860, 480)]
     [InlineData(860, 600)]
     [InlineData(1240, 800)]
     public void MainWindow_MeasureAndArrange_HasNoClippedButtonsAndAlignedSectionBadges(double width, double height)
@@ -128,6 +132,130 @@ public sealed class MainWindowLayoutTests
         });
 
         Assert.Null(staEx);
+    }
+
+    [Fact]
+    public void SharePreviewWindow_MeasureAndArrangeAtLowHeightWorkArea_KeepsCloseButtonVisible()
+    {
+        Exception? staEx = null;
+
+        RunOnStaThread(() =>
+        {
+            try
+            {
+                EnsureAppResourcesLoaded();
+
+                var now = DateTimeOffset.UtcNow;
+                var req = new ScanRequest(now.AddHours(-2), now);
+                var report = new DiagnosisRuleEngine().Evaluate(new RuleEvaluationContext(req, null, [], [], null), []);
+                var vm = new SharePreviewViewModel(report);
+                var previewWin = new SharePreviewWindow(vm);
+
+                var root = Assert.IsAssignableFrom<FrameworkElement>(previewWin.Content);
+                root.Measure(new Size(940, 460));
+                root.Arrange(new Rect(0, 0, 940, 460));
+                root.UpdateLayout();
+
+                foreach (var btn in FindVisualChildren<Button>(root))
+                {
+                    if (btn.Visibility != Visibility.Visible || btn.ActualWidth <= 0)
+                    {
+                        continue;
+                    }
+
+                    var topLeft = btn.TransformToAncestor(root).Transform(new Point(0, 0));
+                    Assert.True(topLeft.Y + btn.ActualHeight <= root.ActualHeight + 1.0, $"SharePreview button '{btn.Content}' bottom clipped at height 460");
+                }
+            }
+            catch (Exception ex)
+            {
+                staEx = ex;
+            }
+        });
+
+        Assert.Null(staEx);
+    }
+
+    [Fact]
+    public async Task MainViewModel_SwitchingCandidate_IsolatesAttachedEngineLogPerIncident()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("gck_vm_iso_");
+        try
+        {
+            var logPath = Path.Combine(tempDir.FullName, "Player.log");
+            File.WriteAllText(
+                logPath,
+                "Initialize engine version: 2022.3.20f1c1\nD3D11: DXGI_ERROR_DEVICE_REMOVED\nCrash!!!\n");
+
+            var now = DateTimeOffset.UtcNow;
+            var req = new ScanRequest(now.AddHours(-2), now);
+            var evA = new EvidenceItem("ev-a", EvidenceSourceKind.WindowsApplicationCrash1000, now.AddMinutes(-2), "EventSystemTimeUtc", "App/1000/1", "1.0.0", new Dictionary<string, string>(), false);
+            var evB = new EvidenceItem("ev-b", EvidenceSourceKind.WindowsApplicationCrash1000, now.AddMinutes(-5), "EventSystemTimeUtc", "App/1000/2", "1.0.0", new Dictionary<string, string>(), false);
+
+            var incA = new CrashIncident("inc-A", IncidentAnchorKind.ApplicationCrash, now.AddMinutes(-2), "GameA.exe", @"D:\Games\GameA\GameA.exe", @"...\GameA\GameA.exe", "GameA.exe", null, "0xc0000005", "0x1", "0x1", null, null, true, false, true, 1, [now.AddMinutes(-2)], AttributionStrength.Unlinked, evA, null, [], null, []);
+            var incB = new CrashIncident("inc-B", IncidentAnchorKind.ApplicationCrash, now.AddMinutes(-5), "GameB.exe", @"D:\Games\GameB\GameB.exe", @"...\GameB\GameB.exe", "GameB.exe", null, "0xc0000005", "0x2", "0x2", null, null, true, false, true, 1, [now.AddMinutes(-5)], AttributionStrength.Unlinked, evB, null, [], null, []);
+
+            var session = new ScanSessionResult(false, false, false, req, new CorrelateResult([incA, incB], 0, [], [evA, evB]), [], null, []);
+            using var vm = new MainViewModel();
+            vm.LoadSessionForTest(session);
+
+            Assert.Equal("GameA.exe", vm.SelectedCandidate!.DisplayTitle);
+            await vm.AttachManualLogFileAsync(logPath);
+            Assert.True(vm.HasAttachedEngineLog);
+            Assert.Contains(vm.PrimaryFindings, static f => f.RuleTag.StartsWith("ENGINE-GPU-LOST", StringComparison.Ordinal));
+
+            vm.SelectedCandidate = vm.Candidates[1];
+            Assert.Equal("GameB.exe", vm.SelectedCandidate.DisplayTitle);
+            Assert.False(vm.HasAttachedEngineLog);
+            Assert.Null(vm.ActiveAttachedEngineLogFullPath);
+            Assert.DoesNotContain(vm.PrimaryFindings, static f => f.RuleTag.StartsWith("ENGINE-GPU-LOST", StringComparison.Ordinal));
+
+            vm.SelectedCandidate = vm.Candidates[0];
+            Assert.True(vm.HasAttachedEngineLog);
+            Assert.Contains(vm.PrimaryFindings, static f => f.RuleTag.StartsWith("ENGINE-GPU-LOST", StringComparison.Ordinal));
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SharePreviewViewModel_SaveOverAttachedSourceLog_IsRejected()
+    {
+        Exception? staEx = null;
+        var tempDir = Directory.CreateTempSubdirectory("gck_overwrite_guard_");
+        try
+        {
+            var sourceLog = Path.Combine(tempDir.FullName, "Player.txt");
+            File.WriteAllText(sourceLog, "original evidence log");
+
+            RunOnStaThread(() =>
+            {
+                try
+                {
+                    EnsureAppResourcesLoaded();
+                    var now = DateTimeOffset.UtcNow;
+                    var req = new ScanRequest(now.AddHours(-2), now);
+                    var report = new DiagnosisRuleEngine().Evaluate(new RuleEvaluationContext(req, null, [], [], null), []);
+                    var vm = new SharePreviewViewModel(report, attachedSourceLogFullPath: sourceLog);
+
+                    Assert.False(vm.SaveMarkdownToPath(sourceLog, out var err));
+                    Assert.Contains("不能覆盖", err);
+                }
+                catch (Exception ex)
+                {
+                    staEx = ex;
+                }
+            });
+
+            Assert.Null(staEx);
+            Assert.Equal("original evidence log", File.ReadAllText(sourceLog));
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
     }
 
     private static void EnsureAppResourcesLoaded()

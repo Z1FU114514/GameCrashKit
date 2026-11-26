@@ -5,7 +5,7 @@
         Width="1020"
         Height="790"
         MinWidth="820"
-        MinHeight="580"
+        MinHeight="460"
         Background="{StaticResource AppBackgroundBrush}"
         Foreground="{StaticResource TextPrimaryBrush}"
         FontFamily="Microsoft YaHei UI, Segoe UI"

@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.IO;
+using GameCrashKit.Core.Correlation;
 using GameCrashKit.Core.Models;
 
 namespace GameCrashKit.Core.Privacy;
@@ -33,21 +35,23 @@ public static class ShareReportProjector
             ? "未定位程序"
             : options.HideAppName
                 ? "<APP>"
-                : PrivacyScrubber.SanitizeStructuredValue(inc.AppName, scrubContext, 64, "未知程序");
+                : PrivacyScrubber.SanitizeIdentifierValue(inc.AppName, scrubContext, 64, "未知程序");
 
-        var pathSuffix = inc is null
+        var installSource = inc is null
             ? "无"
             : options.HideAppName
                 ? "<已隐藏>"
-                : PrivacyScrubber.SanitizeStructuredValue(inc.DisambiguatedPathSuffix, scrubContext, 96, "无可用路径后缀");
+                : PathClassifier.BuildShareSafeInstallSource(inc.NormalizedAppPath, inc.IsLikelyGame);
 
         var moduleName = inc is null
             ? "无"
-            : PrivacyScrubber.SanitizeStructuredValue(inc.ModuleName, scrubContext, 64, "未知模块");
+            : options.HideAppName && IsSameAppModule(inc.ModuleName, inc.AppName)
+                ? "<APP_MODULE>"
+                : PrivacyScrubber.SanitizeIdentifierValue(inc.ModuleName, scrubContext, 64, "未知模块");
 
         var exceptionCode = inc is null
             ? "无"
-            : PrivacyScrubber.SanitizeStructuredValue(inc.ExceptionCode, scrubContext, 32, inc.AnchorKind == IncidentAnchorKind.ApplicationHang ? "不适用（无响应）" : "未知");
+            : PrivacyScrubber.SanitizeIdentifierValue(inc.ExceptionCode, scrubContext, 32, inc.AnchorKind == IncidentAnchorKind.ApplicationHang ? "不适用（无响应）" : "未知");
 
         var occurrenceSummary = inc is null
             ? "0 次"
@@ -56,17 +60,11 @@ public static class ShareReportProjector
         var timestampDisplay = FormatTimestamp(inc?.OccurredAtUtc, options.HideExactTimestamp, tz, report.GeneratedAtUtc);
 
         var findings = report.PrimaryFindings
-            .Select(f => new ShareFindingItem(
-                RuleTag: $"{f.RuleId}@{f.RuleVersion}",
-                Title: PrivacyScrubber.ScrubText(f.Title, scrubContext, scrubIpv4: false),
-                AttributionText: $"归属: {f.Attribution.ToDisplayText()}",
-                EvidenceStrengthText: $"证据: {f.EvidenceStrength.ToDisplayText()}",
-                EvidenceStrength: f.EvidenceStrength,
-                Statement: ScrubFindingAppNameIfHidden(
-                    PrivacyScrubber.ScrubText(f.Statement, scrubContext, scrubIpv4: false),
-                    inc?.AppName,
-                    options.HideAppName),
-                NextActionText: PrivacyScrubber.ScrubText(f.NextActionText, scrubContext, scrubIpv4: false)))
+            .Select(f => ProjectFinding(f, inc?.AppName, options.HideAppName, options.HideExactTimestamp, scrubContext))
+            .ToList();
+
+        var additionalHints = (report.AdditionalHints ?? [])
+            .Select(f => ProjectFinding(f, inc?.AppName, options.HideAppName, options.HideExactTimestamp, scrubContext))
             .ToList();
 
         var backgroundLines = report.SystemBackgroundEvents
@@ -80,15 +78,20 @@ public static class ShareReportProjector
             .Select(c => $"{c.SourceName}: {c.Status}（读取 {c.RecordsRead} 条{(c.Truncated ? "，已截断" : string.Empty)}）")
             .ToList();
 
-        var rawExcerpts = inc?.ConfirmedEngineLog?.RawErrorExcerptLines;
-        var hasAvailableExcerptSource = rawExcerpts is { Count: > 0 };
+        var signalTemplates = BuildFixedSignalSummaryLines(inc?.ConfirmedEngineLog);
+        var hasAvailableExcerptSource = signalTemplates.Count > 0;
         var scrubbedExcerpts = (options.IncludeScrubbedErrorExcerpt && hasAvailableExcerptSource)
-            ? PrivacyScrubber.ScrubExcerptLines(rawExcerpts!, scrubContext)
+            ? signalTemplates
+                .Select(line => ScrubFindingAppNameIfHidden(
+                    PrivacyScrubber.ScrubText(line, scrubContext, scrubIpv4: true, hideTimestamps: options.HideExactTimestamp),
+                    inc?.AppName,
+                    options.HideAppName))
+                .ToList()
             : [];
         var hasOptInExcerpt = scrubbedExcerpts.Count > 0;
 
         var privacyBadge = hasOptInExcerpt
-            ? "已脱敏 · 字段白名单 + 用户确认附带脱敏摘要"
+            ? "已脱敏 · 字段白名单 + 固定结构化日志信号摘要"
             : "已脱敏 · 严格字段白名单（无原始日志/路径/标识）";
 
         return new ShareReportModel(
@@ -98,7 +101,7 @@ public static class ShareReportProjector
             PrivacyBadgeText: privacyBadge,
             IncidentKindLabel: incidentKindLabel,
             AppDisplayName: appDisplayName,
-            DisambiguatedPathSuffix: pathSuffix,
+            DisambiguatedPathSuffix: installSource,
             ModuleName: moduleName,
             ExceptionCode: exceptionCode,
             OccurrenceSummary: occurrenceSummary,
@@ -109,17 +112,131 @@ public static class ShareReportProjector
             CoverageSummaryLines: coverageLines,
             HasAvailableExcerptSource: hasAvailableExcerptSource,
             HasOptInExcerpt: hasOptInExcerpt,
-            OptInScrubbedExcerptLines: scrubbedExcerpts);
+            OptInScrubbedExcerptLines: scrubbedExcerpts,
+            AdditionalHints: additionalHints);
+    }
+
+    private static ShareFindingItem ProjectFinding(
+        DiagnosisFinding f,
+        string? appName,
+        bool hideAppName,
+        bool hideTimestamps,
+        ScrubContext scrubContext)
+    {
+        var title = ScrubFindingAppNameIfHidden(
+            PrivacyScrubber.ScrubText(f.Title, scrubContext, scrubIpv4: true, hideTimestamps: hideTimestamps),
+            appName,
+            hideAppName);
+        var statement = ScrubFindingAppNameIfHidden(
+            PrivacyScrubber.ScrubText(f.Statement, scrubContext, scrubIpv4: true, hideTimestamps: hideTimestamps),
+            appName,
+            hideAppName);
+        var nextAction = ScrubFindingAppNameIfHidden(
+            PrivacyScrubber.ScrubText(f.NextActionText, scrubContext, scrubIpv4: true, hideTimestamps: hideTimestamps),
+            appName,
+            hideAppName);
+        var notes = f.AmbiguityNotes
+            .Select(n => ScrubFindingAppNameIfHidden(
+                PrivacyScrubber.ScrubText(n, scrubContext, scrubIpv4: true, hideTimestamps: hideTimestamps),
+                appName,
+                hideAppName))
+            .Where(static n => !string.IsNullOrWhiteSpace(n))
+            .ToList();
+
+        return new ShareFindingItem(
+            RuleTag: $"{f.RuleId}@{f.RuleVersion}",
+            Title: title,
+            AttributionText: $"归属: {f.Attribution.ToDisplayText()}",
+            EvidenceStrengthText: $"证据: {f.EvidenceStrength.ToDisplayText()}",
+            EvidenceStrength: f.EvidenceStrength,
+            Statement: statement,
+            NextActionText: nextAction,
+            AmbiguityNotes: notes);
+    }
+
+    private static IReadOnlyList<string> BuildFixedSignalSummaryLines(UserConfirmedEngineLog? log)
+    {
+        if (log is null)
+        {
+            return [];
+        }
+
+        var lines = new List<string>
+        {
+            $"日志类型: {log.Kind}" + (string.IsNullOrWhiteSpace(log.EngineVersion) ? string.Empty : $" | 引擎版本: {log.EngineVersion.Trim()}")
+        };
+
+        if (!string.IsNullOrWhiteSpace(log.RhiBackend))
+        {
+            lines.Add($"图形渲染后端 (RHI): {log.RhiBackend.Trim()}");
+        }
+
+        if (log.HasGpuDeviceLostSignal)
+        {
+            lines.Add($"命中固定图形错误标记: {log.GpuLostToken ?? "GPU_DEVICE_LOST"}");
+        }
+
+        if (log.HasOutOfMemorySignal)
+        {
+            lines.Add($"命中固定资源不足标记: {log.OomToken ?? "OUT_OF_MEMORY"}");
+        }
+
+        if (!log.HasGpuDeviceLostSignal && !log.HasOutOfMemorySignal)
+        {
+            lines.Add("固定错误标记扫描: 未命中已知图形丢失或资源耗尽固定标记（原始日志全文限本机查看）");
+        }
+
+        if (log.IsTruncated || log.MayBeOverwritten)
+        {
+            var flags = new List<string>();
+            if (log.IsTruncated) flags.Add("超过 2 MiB 仅解析文件末尾");
+            if (log.MayBeOverwritten) flags.Add("文件可能受后续重开覆盖");
+            lines.Add($"日志读取状态提示: {string.Join("；", flags)}");
+        }
+
+        return lines;
+    }
+
+    private static bool IsSameAppModule(string? moduleName, string? appName)
+    {
+        if (string.IsNullOrWhiteSpace(moduleName) || string.IsNullOrWhiteSpace(appName))
+        {
+            return false;
+        }
+
+        var mod = moduleName.Trim();
+        var app = appName.Trim();
+        if (string.Equals(mod, app, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var modStem = Path.GetFileNameWithoutExtension(mod);
+        var appStem = Path.GetFileNameWithoutExtension(app);
+        return appStem.Length >= 3 && string.Equals(modStem, appStem, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string ScrubFindingAppNameIfHidden(string text, string? appName, bool hideAppName)
     {
-        if (!hideAppName || string.IsNullOrWhiteSpace(appName) || appName.Trim().Length < 2)
+        if (!hideAppName || string.IsNullOrWhiteSpace(appName))
         {
             return text;
         }
 
-        return text.Replace(appName.Trim(), "<APP>", StringComparison.OrdinalIgnoreCase);
+        var trimmed = appName.Trim();
+        var result = text;
+        if (trimmed.Length >= 2)
+        {
+            result = result.Replace(trimmed, "<APP>", StringComparison.OrdinalIgnoreCase);
+        }
+
+        var stem = Path.GetFileNameWithoutExtension(trimmed);
+        if (stem.Length >= 3)
+        {
+            result = result.Replace(stem, "<APP>", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return result;
     }
 
     private static string FormatTimestamp(
@@ -176,8 +293,8 @@ public static class ShareReportProjector
         var gpuText = env.GpuAdapters.Count == 0
             ? "未检测到适配器"
             : string.Join("；", env.GpuAdapters.Select(g =>
-                $"{PrivacyScrubber.SanitizeStructuredValue(g.Name, scrubContext, 48, "GPU")} ({PrivacyScrubber.SanitizeStructuredValue(g.DriverVersion, scrubContext, 24, "未知")} / 发布 {g.DriverReleaseDateIso ?? "未知"})"));
-        items.Add(new ShareEnvironmentItem("显卡与驱动发布日期", gpuText, "信息", EnvironmentNoticeLevel.Info));
+                $"{PrivacyScrubber.SanitizeStructuredValue(g.Name, scrubContext, 48, "GPU")} ({PrivacyScrubber.SanitizeStructuredValue(g.DriverVersion, scrubContext, 24, "未知")} / 驱动包日期 {g.DriverReleaseDateIso ?? "未知"})"));
+        items.Add(new ShareEnvironmentItem("显卡与驱动包日期", gpuText, "信息", EnvironmentNoticeLevel.Info));
 
         var pathText = !env.TargetPath.Checked
             ? "未选中目标程序"
@@ -189,21 +306,26 @@ public static class ShareReportProjector
 
         items.Add(new ShareEnvironmentItem(
             "文档目录 OneDrive",
-            env.OneDriveDocs.IsInOneDrive ? "位于 OneDrive 同步目录" : "未指向 OneDrive",
+            PrivacyScrubber.ScrubText(env.OneDriveDocs.StatusText, scrubContext, scrubIpv4: true),
             ToNoticeLabel(env.OneDriveDocs.NoticeLevel),
             env.OneDriveDocs.NoticeLevel));
 
-        var vcText = $"x64: {(env.VcRuntime.X64Installed ? env.VcRuntime.X64Version ?? "已装" : "缺失")} | x86: {(env.VcRuntime.X86Installed ? env.VcRuntime.X86Version ?? "已装" : "缺失")}";
+        var vcMissingText = env.VcRuntime.NoticeLevel == EnvironmentNoticeLevel.Unavailable ? "探测不可用" : "未检测到登记";
+        var vcText = $"x64: {(env.VcRuntime.X64Installed ? env.VcRuntime.X64Version ?? "已装" : vcMissingText)} | x86: {(env.VcRuntime.X86Installed ? env.VcRuntime.X86Version ?? "已装" : vcMissingText)}";
         items.Add(new ShareEnvironmentItem("VC++ 运行库", vcText, ToNoticeLabel(env.VcRuntime.NoticeLevel), env.VcRuntime.NoticeLevel));
 
-        var pfText = env.PageFile.IsDisabled
-            ? "已禁用"
-            : $"{env.PageFile.TotalAllocatedMb} MB（{env.PageFile.PageFileCount} 个）";
+        var pfText = !env.PageFile.Checked
+            ? "探测不可用"
+            : env.PageFile.IsDisabled
+                ? "未检测到活跃配置"
+                : $"当前已分配 {env.PageFile.TotalAllocatedMb} MB（{env.PageFile.PageFileCount} 个）";
         items.Add(new ShareEnvironmentItem("虚拟内存页面文件", pfText, ToNoticeLabel(env.PageFile.NoticeLevel), env.PageFile.NoticeLevel));
 
-        var overlayText = env.RunningOverlays.DetectedOverlayNames.Count == 0
-            ? "扫描瞬间未发现常见覆盖层"
-            : $"扫描瞬间运行: {string.Join("、", env.RunningOverlays.DetectedOverlayNames)}";
+        var overlayText = !env.RunningOverlays.Checked
+            ? "扫描受限或不可用"
+            : env.RunningOverlays.DetectedOverlayNames.Count == 0
+                ? "扫描瞬间未发现常见覆盖层"
+                : $"扫描瞬间运行: {string.Join("、", env.RunningOverlays.DetectedOverlayNames)}";
         items.Add(new ShareEnvironmentItem("常见覆盖层快照", overlayText, env.RunningOverlays.Checked ? "信息" : "不可用", env.RunningOverlays.Checked ? EnvironmentNoticeLevel.Info : EnvironmentNoticeLevel.Unavailable));
 
         var hvciText = env.SystemInfo.HvciEnabled switch { true => "开", false => "关", null => "未知" };

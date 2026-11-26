@@ -35,7 +35,10 @@ public static partial class PrivacyScrubber
     [GeneratedRegex(@"\b7656119\d{10}\b", RegexOptions.CultureInvariant, TimeoutMs)]
     private static partial Regex Steam64IdRegex();
 
-    [GeneratedRegex(@"(?<key>token|apikey|api_key|secret|password|passwd|auth_token|auth|session_id|cookie)\s*[:=]\s*[^\s&;,""'`]+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeoutMs)]
+    [GeneratedRegex(@"\[U:1:\d+\]|\bSTEAM_[0-5]:[01]:\d+\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeoutMs)]
+    private static partial Regex Steam3AndLegacyIdRegex();
+
+    [GeneratedRegex(@"(?<key>token|apikey|api_key|secret|password|passwd|auth_token|auth|session_id|cookie|account|username|user_name|userid|user_id|player_id|login)\s*[:=]\s*(?:""[^""\r\n]*""|'[^'\r\n]*'|[^\s&;,""'`]+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeoutMs)]
     private static partial Regex SecretKeyValueRegex();
 
     [GeneratedRegex(@"\bBearer\s+[A-Za-z0-9\-._~+/]+=*", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeoutMs)]
@@ -47,7 +50,10 @@ public static partial class PrivacyScrubber
     [GeneratedRegex(@"(?<![:\da-f])(?:(?:[0-9a-f]{1,4}:){7}[0-9a-f]{1,4}|(?:[0-9a-f]{1,4}:){1,6}:(?:[0-9a-f]{1,4}:){0,5}[0-9a-f]{1,4}|::1)(?![:\da-f])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeoutMs)]
     private static partial Regex Ipv6Regex();
 
-    public static string ScrubText(string input, ScrubContext context, bool scrubIpv4 = true)
+    [GeneratedRegex(@"\b(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,6})?\b", RegexOptions.CultureInvariant, TimeoutMs)]
+    private static partial Regex ClockTimestampRegex();
+
+    public static string ScrubText(string input, ScrubContext context, bool scrubIpv4 = true, bool hideTimestamps = false)
     {
         ArgumentNullException.ThrowIfNull(context);
         if (string.IsNullOrEmpty(input))
@@ -75,6 +81,7 @@ public static partial class PrivacyScrubber
         text = WindowsSidRegex().Replace(text, "<SID>");
         text = EmailRegex().Replace(text, "<EMAIL>");
         text = Steam64IdRegex().Replace(text, "<STEAM_ID>");
+        text = Steam3AndLegacyIdRegex().Replace(text, "<STEAM_ID>");
         text = SecretKeyValueRegex().Replace(text, "${key}=<REDACTED>");
         text = BearerTokenRegex().Replace(text, "Bearer <REDACTED>");
 
@@ -84,18 +91,36 @@ public static partial class PrivacyScrubber
             text = Ipv6Regex().Replace(text, "<IP>");
         }
 
-        if (!string.IsNullOrWhiteSpace(context.CurrentMachineName) && context.CurrentMachineName.Trim().Length >= 2)
+        if (hideTimestamps)
         {
-            var pc = context.CurrentMachineName.Trim();
-            text = Regex.Replace(
-                text,
-                $@"(?<![A-Za-z0-9_]){Regex.Escape(pc)}(?![A-Za-z0-9_])",
-                "<PC_NAME>",
-                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
-                TimeSpan.FromMilliseconds(TimeoutMs));
+            text = ClockTimestampRegex().Replace(text, "<TIME>");
         }
 
-        if (!string.IsNullOrWhiteSpace(context.CurrentUserName) && context.CurrentUserName.Trim().Length >= 3)
+        if (!string.IsNullOrWhiteSpace(context.CurrentMachineName))
+        {
+            var pc = context.CurrentMachineName.Trim();
+            if (pc.Length >= 2)
+            {
+                text = Regex.Replace(
+                    text,
+                    $@"(?<![A-Za-z0-9_]){Regex.Escape(pc)}(?![A-Za-z0-9_])",
+                    "<PC_NAME>",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+                    TimeSpan.FromMilliseconds(TimeoutMs));
+            }
+            else if (pc.Length == 1)
+            {
+                var escapedPc = Regex.Escape(pc);
+                text = Regex.Replace(
+                    text,
+                    $@"(?<=\b(?:host|machine|computer|pc|on)\s+){escapedPc}(?![A-Za-z0-9_])|(?<=\\\\){escapedPc}(?=\\)",
+                    "<PC_NAME>",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+                    TimeSpan.FromMilliseconds(TimeoutMs));
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(context.CurrentUserName) && context.CurrentUserName.Trim().Length >= 2)
         {
             var user = context.CurrentUserName.Trim();
             text = Regex.Replace(
@@ -109,7 +134,7 @@ public static partial class PrivacyScrubber
         return text;
     }
 
-    public static IReadOnlyList<string> ScrubExcerptLines(IReadOnlyList<string> rawLines, ScrubContext context)
+    public static IReadOnlyList<string> ScrubExcerptLines(IReadOnlyList<string> rawLines, ScrubContext context, bool hideTimestamps = false)
     {
         ArgumentNullException.ThrowIfNull(rawLines);
         ArgumentNullException.ThrowIfNull(context);
@@ -124,7 +149,7 @@ public static partial class PrivacyScrubber
                 break;
             }
 
-            var scrubbed = ScrubText(raw, context, scrubIpv4: true).Trim();
+            var scrubbed = ScrubText(raw, context, scrubIpv4: true, hideTimestamps: hideTimestamps).Trim();
             if (scrubbed.Length == 0)
             {
                 continue;
@@ -154,7 +179,28 @@ public static partial class PrivacyScrubber
     }
 
     /// <summary>
-    /// Sanitizes structured identifiers/version fields without mangling dotted version numbers (e.g. 32.0.16.1664).
+    /// Sanitizes structured identifiers/error codes (with IPv4/IPv6 scrubbing enabled).
+    /// </summary>
+    public static string SanitizeIdentifierValue(string? value, ScrubContext context, int maxLength, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return fallback;
+        }
+
+        var scrubbed = ScrubText(value, context, scrubIpv4: true).Trim();
+        if (scrubbed.Length == 0)
+        {
+            return fallback;
+        }
+
+        return scrubbed.Length <= maxLength
+            ? scrubbed
+            : scrubbed[..(maxLength - 3)] + "...";
+    }
+
+    /// <summary>
+    /// Sanitizes dotted version numbers/hardware labels without mangling dotted version numbers (e.g. 32.0.16.1664).
     /// </summary>
     public static string SanitizeStructuredValue(string? value, ScrubContext context, int maxLength, string fallback)
     {

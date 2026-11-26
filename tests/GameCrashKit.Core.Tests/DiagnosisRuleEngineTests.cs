@@ -269,4 +269,59 @@ public sealed class DiagnosisRuleEngineTests
         Assert.Equal(unknown.EvidenceIds, unknown2.EvidenceIds);
         Assert.Equal(unknown.AmbiguityNotes, unknown2.AmbiguityNotes);
     }
+
+    [Fact]
+    public void Evaluate_ProxyDllWithNullModulePath_DoesNotTriggerThirdPartyModuleHint()
+    {
+        var engine = new DiagnosisRuleEngine();
+        var inc = MakeIncident(moduleName: "version.dll", modulePath: null, exceptionCode: "0xc0000001");
+        var report = engine.Evaluate(new RuleEvaluationContext(DefaultReq, inc, [], [], null), [inc.PrimaryEvidence]);
+
+        Assert.DoesNotContain(report.PrimaryFindings, static f => f.RuleId == "THIRD-PARTY-MODULE-HINT");
+    }
+
+    [Fact]
+    public void Evaluate_Exception0xe0000008Alone_DowngradesToLimitedClueWithoutPageFilePrescription()
+    {
+        var engine = new DiagnosisRuleEngine();
+        var inc = MakeIncident(moduleName: "chrome_elf.dll", exceptionCode: "0xe0000008");
+        var report = engine.Evaluate(new RuleEvaluationContext(DefaultReq, inc, [], [], null), [inc.PrimaryEvidence]);
+
+        var oom = Assert.Single(report.PrimaryFindings, static f => f.RuleId == "ENGINE-OOM");
+        Assert.Equal(EvidenceStrength.LimitedClue, oom.EvidenceStrength);
+        Assert.DoesNotContain("关闭", oom.NextActionText);
+        Assert.DoesNotContain("页面文件", oom.NextActionText);
+    }
+
+    [Fact]
+    public void Evaluate_PrimaryCapExceeded_PreservesAdditionalHints()
+    {
+        var engine = new DiagnosisRuleEngine();
+        var engineLog = new UserConfirmedEngineLog(
+            EngineLogKind.Unity,
+            "Player.log",
+            "Player.log",
+            NowUtc,
+            false,
+            false,
+            "2022.3",
+            "D3D11",
+            true,
+            "DXGI_ERROR_DEVICE_REMOVED",
+            false,
+            null,
+            ["DXGI_ERROR_DEVICE_REMOVED"]);
+
+        var inc = MakeIncident(
+            moduleName: "RTSSHooks64.dll",
+            modulePath: @"C:\Program Files (x86)\RivaTuner\RTSSHooks64.dll",
+            exceptionCode: "0xc0000005",
+            engineLog: engineLog);
+
+        var report = engine.Evaluate(new RuleEvaluationContext(DefaultReq, inc, [], [], null), [inc.PrimaryEvidence]);
+
+        Assert.Equal(3, report.PrimaryFindings.Count);
+        Assert.NotNull(report.AdditionalHints);
+        Assert.Contains(report.AdditionalHints!, static h => h.RuleId == "THIRD-PARTY-MODULE-HINT");
+    }
 }

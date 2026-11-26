@@ -296,10 +296,9 @@ public static class EngineLogParser
             }
         }
 
-        if (selected.Count == 0 && lines.Count > 0)
+        if (selected.Count == 0)
         {
-            var start = Math.Max(0, lines.Count - MaxExcerptLines);
-            return BuildCappedExcerpts(lines.Skip(start).ToList());
+            return [];
         }
 
         selected.Reverse();

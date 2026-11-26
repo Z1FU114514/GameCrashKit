@@ -174,35 +174,58 @@ public static class SafeLocalFileReader
             var actualEnd = readStart + totalRead;
             var decodeSpan = buffer.AsSpan(0, totalRead);
 
-            if (!isTruncated)
+            string decoded;
+            if (!isTruncated && decodeSpan.Length >= 2 && decodeSpan[0] == 0xFF && decodeSpan[1] == 0xFE)
             {
-                // Strip UTF-8 BOM if present at byte 0.
-                if (decodeSpan.Length >= 3 && decodeSpan[0] == 0xEF && decodeSpan[1] == 0xBB && decodeSpan[2] == 0xBF)
+                try
                 {
-                    decodeSpan = decodeSpan[3..];
+                    decoded = new UnicodeEncoding(bigEndian: false, byteOrderMark: false, throwOnInvalidBytes: true)
+                        .GetString(decodeSpan[2..]);
+                }
+                catch (DecoderFallbackException)
+                {
+                    return Fail(SafeFileReadErrorKind.InvalidUtf8Encoding, "文件不是有效的 UTF-16 LE 编码文本，建议在本机另存为 UTF-8 后重试。");
+                }
+            }
+            else if (!isTruncated && decodeSpan.Length >= 2 && decodeSpan[0] == 0xFE && decodeSpan[1] == 0xFF)
+            {
+                try
+                {
+                    decoded = new UnicodeEncoding(bigEndian: true, byteOrderMark: false, throwOnInvalidBytes: true)
+                        .GetString(decodeSpan[2..]);
+                }
+                catch (DecoderFallbackException)
+                {
+                    return Fail(SafeFileReadErrorKind.InvalidUtf8Encoding, "文件不是有效的 UTF-16 BE 编码文本，建议在本机另存为 UTF-8 后重试。");
                 }
             }
             else
             {
-                // Skip up to 3 UTF-8 continuation bytes (10xxxxxx) at the arbitrary tail-seek boundary.
-                var skip = 0;
-                while (skip < 3 && skip < decodeSpan.Length && (decodeSpan[skip] & 0xC0) == 0x80)
+                if (!isTruncated && decodeSpan.Length >= 3 && decodeSpan[0] == 0xEF && decodeSpan[1] == 0xBB && decodeSpan[2] == 0xBF)
                 {
-                    skip++;
+                    decodeSpan = decodeSpan[3..];
+                }
+                else if (isTruncated)
+                {
+                    // Skip up to 3 UTF-8 continuation bytes (10xxxxxx) at the arbitrary tail-seek boundary.
+                    var skip = 0;
+                    while (skip < 3 && skip < decodeSpan.Length && (decodeSpan[skip] & 0xC0) == 0x80)
+                    {
+                        skip++;
+                    }
+
+                    decodeSpan = decodeSpan[skip..];
                 }
 
-                decodeSpan = decodeSpan[skip..];
-            }
-
-            string decoded;
-            try
-            {
-                var strictUtf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
-                decoded = strictUtf8.GetString(decodeSpan);
-            }
-            catch (DecoderFallbackException)
-            {
-                return Fail(SafeFileReadErrorKind.InvalidUtf8Encoding, "文件不是有效的 UTF-8 编码文本，已拒绝解析。");
+                try
+                {
+                    var strictUtf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+                    decoded = strictUtf8.GetString(decodeSpan);
+                }
+                catch (DecoderFallbackException)
+                {
+                    return Fail(SafeFileReadErrorKind.InvalidUtf8Encoding, "文件不是有效的 UTF-8 或 UTF-16 编码文本，建议在本机另存为 UTF-8 后重试。");
+                }
             }
 
             if (isTruncated)
@@ -238,6 +261,101 @@ public static class SafeLocalFileReader
         {
             return Fail(SafeFileReadErrorKind.ReadFailed, $"读取文件失败：{ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Validates a directory path purely for fixed-drive locality BEFORE any remote/network probe
+    /// and verifies existing ancestor segments contain no reparse points.
+    /// </summary>
+    internal static bool TryValidateLocalDirectoryWithoutNetworkAccess(
+        string? rawPath,
+        out string? normalizedFullPath,
+        out bool isRemoteOrNonFixed,
+        out bool hasReparseAncestor)
+    {
+        normalizedFullPath = null;
+        isRemoteOrNonFixed = false;
+        hasReparseAncestor = false;
+
+        if (string.IsNullOrWhiteSpace(rawPath))
+        {
+            return false;
+        }
+
+        var trimmed = rawPath.Trim().Trim('"');
+        if (trimmed.StartsWith(@"\\", StringComparison.Ordinal) ||
+            trimmed.StartsWith("//", StringComparison.Ordinal))
+        {
+            isRemoteOrNonFixed = true;
+            return false;
+        }
+
+        if (!Path.IsPathFullyQualified(trimmed))
+        {
+            return false;
+        }
+
+        string fullPath;
+        try
+        {
+            fullPath = Path.GetFullPath(trimmed);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+
+        var root = Path.GetPathRoot(fullPath);
+        if (string.IsNullOrWhiteSpace(root) || root.StartsWith(@"\\", StringComparison.Ordinal))
+        {
+            isRemoteOrNonFixed = true;
+            return false;
+        }
+
+        try
+        {
+            var drive = new DriveInfo(root);
+            if (drive.DriveType != DriveType.Fixed)
+            {
+                isRemoteOrNonFixed = true;
+                return false;
+            }
+        }
+        catch (Exception)
+        {
+            isRemoteOrNonFixed = true;
+            return false;
+        }
+
+        try
+        {
+            var relative = fullPath[root.Length..];
+            var parts = relative.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+            var current = root;
+            for (var i = 0; i < parts.Length; i++)
+            {
+                current = Path.Combine(current, parts[i]);
+                if (!Directory.Exists(current))
+                {
+                    break;
+                }
+
+                var attrs = File.GetAttributes(current);
+                if ((attrs & FileAttributes.ReparsePoint) != 0)
+                {
+                    hasReparseAncestor = true;
+                    return false;
+                }
+            }
+        }
+        catch (Exception)
+        {
+            hasReparseAncestor = true;
+            return false;
+        }
+
+        normalizedFullPath = fullPath;
+        return true;
     }
 
     internal static bool HasAnyReparsePointInPath(

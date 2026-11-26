@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Xml;
@@ -26,26 +27,39 @@ public sealed record EngineLogLoadResult(
 /// <summary>
 /// Read-only, bounded-depth discovery for Unity (<c>Player.log</c>/<c>Player-prev.log</c>)
 /// and Unreal (<c>CrashContext.runtime-xml</c>) crash logs, plus safe user-confirmed file loading.
+/// Strictly rejects network/non-fixed directories and reparse-point ancestors before enumeration.
 /// </summary>
 public static class EngineLogDiscovery
 {
+    private const int DefaultMaxDirectoriesVisited = 400;
+    private const int DefaultTimeBudgetMs = 1_500;
+
     public static IReadOnlyList<DiscoveredEngineLogCandidate> DiscoverInWindow(
         DateTimeOffset windowStartUtc,
-        int maxCandidates = 20)
+        int maxCandidates = 20,
+        CancellationToken cancellationToken = default)
     {
         var results = new List<DiscoveredEngineLogCandidate>();
+        var budget = new DiscoveryBudget(DefaultMaxDirectoriesVisited, DefaultTimeBudgetMs, cancellationToken);
 
-        var userProfile = System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile);
+        var userProfile = System.Environment.GetFolderPath(
+            System.Environment.SpecialFolder.UserProfile,
+            System.Environment.SpecialFolderOption.DoNotVerify);
         if (!string.IsNullOrWhiteSpace(userProfile))
         {
             var localLow = Path.Combine(userProfile, "AppData", "LocalLow");
-            DiscoverUnityLogs(localLow, windowStartUtc, results);
+            DiscoverUnityLogs(localLow, windowStartUtc, results, budget);
         }
 
-        var localAppData = System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData);
-        if (!string.IsNullOrWhiteSpace(localAppData))
+        if (!budget.IsExhausted)
         {
-            DiscoverUnrealCrashes(localAppData, windowStartUtc, results);
+            var localAppData = System.Environment.GetFolderPath(
+                System.Environment.SpecialFolder.LocalApplicationData,
+                System.Environment.SpecialFolderOption.DoNotVerify);
+            if (!string.IsNullOrWhiteSpace(localAppData))
+            {
+                DiscoverUnrealCrashes(localAppData, windowStartUtc, results, budget);
+            }
         }
 
         return results
@@ -72,6 +86,19 @@ public static class EngineLogDiscovery
         }
 
         var fileName = Path.GetFileName(filePath);
+        var isUnrealXmlFile = kindHint == EngineLogKind.Unreal ||
+            fileName.EndsWith(".runtime-xml", StringComparison.OrdinalIgnoreCase);
+
+        if (isUnrealXmlFile && readResult.IsTruncated)
+        {
+            return new EngineLogLoadResult(
+                Success: false,
+                ErrorKind: SafeFileReadErrorKind.ReadFailed,
+                ErrorMessage: "CrashContext.runtime-xml 超出 2 MiB 安全读取上限，XML 上下文不完整，已中止解析（未回退到自由文本解析）。",
+                EngineLog: null,
+                FileReadResult: readResult);
+        }
+
         var byteRange = string.Format(
             CultureInfo.InvariantCulture,
             "{0} (Bytes {1}..{2} / {3}{4})",
@@ -83,7 +110,8 @@ public static class EngineLogDiscovery
 
         try
         {
-            var parsed = kindHint switch
+            var effectiveKind = isUnrealXmlFile ? EngineLogKind.Unreal : kindHint;
+            var parsed = effectiveKind switch
             {
                 EngineLogKind.Unity => EngineLogParser.ParseUnityPlayerLog(
                     readResult.Content,
@@ -128,17 +156,20 @@ public static class EngineLogDiscovery
     private static void DiscoverUnityLogs(
         string localLowDir,
         DateTimeOffset windowStartUtc,
-        List<DiscoveredEngineLogCandidate> results)
+        List<DiscoveredEngineLogCandidate> results,
+        DiscoveryBudget budget)
     {
-        if (!IsSafeExistingDirectory(localLowDir))
+        if (!IsSafeExistingDirectory(localLowDir, budget))
         {
             return;
         }
 
-        foreach (var companyDir in SafeEnumerateDirectories(localLowDir))
+        foreach (var companyDir in SafeEnumerateDirectories(localLowDir, budget))
         {
-            foreach (var productDir in SafeEnumerateDirectories(companyDir))
+            if (budget.IsExhausted) break;
+            foreach (var productDir in SafeEnumerateDirectories(companyDir, budget))
             {
+                if (budget.IsExhausted) break;
                 CheckUnityFile(productDir, "Player.log", mayBeOverwritten: true, windowStartUtc, results);
                 CheckUnityFile(productDir, "Player-prev.log", mayBeOverwritten: false, windowStartUtc, results);
             }
@@ -173,23 +204,34 @@ public static class EngineLogDiscovery
     private static void DiscoverUnrealCrashes(
         string localAppDataDir,
         DateTimeOffset windowStartUtc,
-        List<DiscoveredEngineLogCandidate> results)
+        List<DiscoveredEngineLogCandidate> results,
+        DiscoveryBudget budget)
     {
-        if (!IsSafeExistingDirectory(localAppDataDir))
+        if (!IsSafeExistingDirectory(localAppDataDir, budget))
         {
             return;
         }
 
-        foreach (var appDir in SafeEnumerateDirectories(localAppDataDir))
+        foreach (var appDir in SafeEnumerateDirectories(localAppDataDir, budget))
         {
-            var crashesDir = Path.Combine(appDir, "Saved", "Crashes");
-            if (!IsSafeExistingDirectory(crashesDir))
+            if (budget.IsExhausted) break;
+
+            var savedDir = Path.Combine(appDir, "Saved");
+            if (!IsSafeExistingChildDirectory(savedDir, budget))
             {
                 continue;
             }
 
-            foreach (var crashSubDir in SafeEnumerateDirectories(crashesDir))
+            var crashesDir = Path.Combine(savedDir, "Crashes");
+            if (!IsSafeExistingChildDirectory(crashesDir, budget))
             {
+                continue;
+            }
+
+            foreach (var crashSubDir in SafeEnumerateDirectories(crashesDir, budget))
+            {
+                if (budget.IsExhausted) break;
+
                 var xmlPath = Path.Combine(crashSubDir, "CrashContext.runtime-xml");
                 if (!TryGetCandidateInfo(xmlPath, windowStartUtc, out var info))
                 {
@@ -210,8 +252,28 @@ public static class EngineLogDiscovery
         }
     }
 
-    private static bool IsSafeExistingDirectory(string dirPath)
+    private static bool IsSafeExistingDirectory(string dirPath, DiscoveryBudget budget)
     {
+        if (budget.IsExhausted || !budget.TryConsumeDirectory())
+        {
+            return false;
+        }
+
+        if (!SafeLocalFileReader.TryValidateLocalDirectoryWithoutNetworkAccess(dirPath, out var normalized, out _, out _))
+        {
+            return false;
+        }
+
+        return normalized is not null && Directory.Exists(normalized);
+    }
+
+    private static bool IsSafeExistingChildDirectory(string dirPath, DiscoveryBudget budget)
+    {
+        if (budget.IsExhausted || !budget.TryConsumeDirectory())
+        {
+            return false;
+        }
+
         try
         {
             if (!Directory.Exists(dirPath))
@@ -228,17 +290,66 @@ public static class EngineLogDiscovery
         }
     }
 
-    private static IEnumerable<string> SafeEnumerateDirectories(string parentDir)
+    private static IEnumerable<string> SafeEnumerateDirectories(string parentDir, DiscoveryBudget budget)
     {
+        if (budget.IsExhausted)
+        {
+            return [];
+        }
+
         try
         {
-            return Directory.EnumerateDirectories(parentDir)
-                .Where(IsSafeExistingDirectory)
-                .ToArray();
+            var list = new List<string>();
+            foreach (var dir in Directory.EnumerateDirectories(parentDir))
+            {
+                if (budget.IsExhausted)
+                {
+                    break;
+                }
+
+                if (IsSafeExistingChildDirectory(dir, budget))
+                {
+                    list.Add(dir);
+                }
+            }
+
+            return list;
         }
         catch (Exception)
         {
             return [];
+        }
+    }
+
+    private sealed class DiscoveryBudget
+    {
+        private readonly Stopwatch _sw = Stopwatch.StartNew();
+        private readonly int _maxDirectories;
+        private readonly int _timeBudgetMs;
+        private readonly CancellationToken _ct;
+        private int _visitedDirectories;
+
+        public DiscoveryBudget(int maxDirectories, int timeBudgetMs, CancellationToken ct)
+        {
+            _maxDirectories = maxDirectories;
+            _timeBudgetMs = timeBudgetMs;
+            _ct = ct;
+        }
+
+        public bool IsExhausted =>
+            _ct.IsCancellationRequested ||
+            _visitedDirectories >= _maxDirectories ||
+            _sw.ElapsedMilliseconds >= _timeBudgetMs;
+
+        public bool TryConsumeDirectory()
+        {
+            if (IsExhausted)
+            {
+                return false;
+            }
+
+            _visitedDirectories++;
+            return true;
         }
     }
 

@@ -14,6 +14,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="GameCrashKit.App.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\GameCrashKit.Core\GameCrashKit.Core.csproj" />
     <ProjectReference Include="..\GameCrashKit.Windows\GameCrashKit.Windows.csproj" />
   </ItemGroup>

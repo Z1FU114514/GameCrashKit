@@ -275,4 +275,45 @@ public sealed class IncidentCorrelatorTests
         Assert.Equal(0, allRes.FilteredNoiseCount);
         Assert.Equal("MyGame.exe", allRes.Candidates[0].AppName); // likely game prioritized first
     }
+
+    [Fact]
+    public void Correlate_ReversedWerOrder_StillLinksUniqueReportIdDirectAndBlocksConflictingWeakMatch()
+    {
+        var ev1000 = MakeApp1000(101, BaseUtc, reportId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var werWeakFirst = MakeWer1001(
+            102,
+            BaseUtc.AddSeconds(2),
+            "APPCRASH",
+            "SampleGame.exe",
+            reportId: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            appPath: @"D:\Games\steamapps\common\SampleGame\SampleGame.exe");
+        var werDirectSecond = MakeWer1001(
+            103,
+            BaseUtc.AddSeconds(4),
+            "APPCRASH",
+            "SampleGame.exe",
+            reportId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            appPath: @"D:\Games\steamapps\common\SampleGame\SampleGame.exe");
+
+        var result = IncidentCorrelator.Correlate(DefaultRequest(), [ev1000, werWeakFirst, werDirectSecond]);
+
+        var crashInc = Assert.Single(result.Candidates, static c => c.AnchorKind == IncidentAnchorKind.ApplicationCrash);
+        Assert.Equal(AttributionStrength.Direct, crashInc.WerLinkAttribution);
+        Assert.Single(result.Candidates, static c => c.AnchorKind == IncidentAnchorKind.WerReportOnly);
+    }
+
+    [Fact]
+    public void Correlate_RepeatedIncidents_RetainsEarlierWerEvidenceWhenLatestAnchorUnlinked()
+    {
+        var older1000 = MakeApp1000(101, BaseUtc.AddMinutes(-20), reportId: "11111111-1111-1111-1111-111111111111");
+        var olderWer = MakeWer1001(102, BaseUtc.AddMinutes(-20).AddSeconds(2), "APPCRASH", "SampleGame.exe", "11111111-1111-1111-1111-111111111111");
+        var newer1000 = MakeApp1000(103, BaseUtc, reportId: "22222222-2222-2222-2222-222222222222");
+
+        var result = IncidentCorrelator.Correlate(DefaultRequest(), [older1000, olderWer, newer1000]);
+
+        var inc = Assert.Single(result.Candidates);
+        Assert.Equal(2, inc.OccurrenceCountInWindow);
+        Assert.Equal(AttributionStrength.Direct, inc.WerLinkAttribution);
+        Assert.NotNull(inc.LinkedWerEvidence);
+    }
 }

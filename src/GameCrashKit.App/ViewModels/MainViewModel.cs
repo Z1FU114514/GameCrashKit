@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO;
+using GameCrashKit.Core;
 using GameCrashKit.Core.Models;
 using GameCrashKit.Windows.FileSystem;
 using GameCrashKit.Windows.Scanning;
@@ -72,7 +74,8 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     private readonly WindowsScanCoordinator _coordinator = new();
     private CancellationTokenSource? _activeScanCts;
     private ScanSessionResult? _currentSession;
-    private UserConfirmedEngineLog? _confirmedEngineLog;
+    private readonly Dictionary<string, (UserConfirmedEngineLog Log, string FullPath)> _incidentEngineLogs = new(StringComparer.Ordinal);
+    private (UserConfirmedEngineLog Log, string FullPath)? _standaloneEngineLog;
 
     private WindowPresetOption _selectedWindowPreset;
     private bool _includeAllApplications;
@@ -106,6 +109,11 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         ClearEngineLogCommand = new RelayCommand(OnClearEngineLog, () => HasAttachedEngineLog);
         OpenReferenceUrlCommand = new RelayCommand(OnOpenReferenceUrl);
     }
+
+    public string AppVersionDisplay => $"v{AppVersionInfo.Current}";
+    public string WindowTitle => $"GameCrash Kit（游戏闪退急诊室）v{AppVersionInfo.Current}";
+
+    public string? ActiveAttachedEngineLogFullPath => GetActiveAttachedEngineLogEntry()?.FullPath;
 
     public IReadOnlyList<WindowPresetOption> WindowPresets { get; }
 
@@ -198,6 +206,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         {
             if (SetProperty(ref _selectedCandidate, value))
             {
+                SyncAttachedLogUiForSelectedCandidate();
                 RebuildReport();
             }
         }
@@ -285,8 +294,20 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         }
 
         var loadResult = EngineLogDiscovery.LoadAndParseUserSelectedFile(filePath);
-        ApplyEngineLogLoadResult(loadResult);
+        ApplyEngineLogLoadResult(loadResult, filePath);
         return Task.CompletedTask;
+    }
+
+    internal void LoadSessionForTest(ScanSessionResult session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        _currentSession = session;
+        _incidentEngineLogs.Clear();
+        _standaloneEngineLog = null;
+        PopulateCandidates(session);
+        SelectedCandidate = Candidates.FirstOrDefault();
+        SyncAttachedLogUiForSelectedCandidate();
+        RebuildReport();
     }
 
     private async Task ExecuteScanAsync()
@@ -310,7 +331,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             var windowStartUtc = DateTimeOffset.UtcNow - preset.ToTimeSpan();
 
             var scanTask = _coordinator.ScanAsync(preset, includeAll, WindowsScanCoordinator.SoftDeadlineMs, ct);
-            var discoveryTask = Task.Run(() => EngineLogDiscovery.DiscoverInWindow(windowStartUtc), ct);
+            var discoveryTask = Task.Run(() => EngineLogDiscovery.DiscoverInWindow(windowStartUtc, cancellationToken: ct), ct);
 
             var session = await scanTask;
             IReadOnlyList<DiscoveredEngineLogCandidate> discovered = [];
@@ -340,9 +361,9 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             }
 
             _currentSession = session;
-            _confirmedEngineLog = null;
-            HasAttachedEngineLog = false;
-            AttachedEngineLogSummary = "尚未确认关联任何游戏引擎日志";
+            _incidentEngineLogs.Clear();
+            _standaloneEngineLog = null;
+            SyncAttachedLogUiForSelectedCandidate();
 
             PopulateDiscoveredLogs(discovered);
             PopulateCandidates(session);
@@ -413,19 +434,26 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             candidate.Kind,
             candidate.MayBeOverwritten);
 
-        ApplyEngineLogLoadResult(loadResult);
+        ApplyEngineLogLoadResult(loadResult, candidate.FullPath);
     }
 
     private void OnClearEngineLog()
     {
-        _confirmedEngineLog = null;
-        HasAttachedEngineLog = false;
-        AttachedEngineLogSummary = "尚未确认关联任何游戏引擎日志";
-        EngineLogFeedbackMessage = "已取消当前引擎日志关联。";
+        if (SelectedCandidate is not null)
+        {
+            _incidentEngineLogs.Remove(SelectedCandidate.Model.IncidentId);
+        }
+        else
+        {
+            _standaloneEngineLog = null;
+        }
+
+        SyncAttachedLogUiForSelectedCandidate();
+        EngineLogFeedbackMessage = "已取消当前选中事故的引擎日志关联。";
         RebuildReport();
     }
 
-    private void ApplyEngineLogLoadResult(EngineLogLoadResult result)
+    private void ApplyEngineLogLoadResult(EngineLogLoadResult result, string sourceFullPath)
     {
         if (!result.Success || result.EngineLog is null)
         {
@@ -433,10 +461,50 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        _confirmedEngineLog = result.EngineLog;
-        HasAttachedEngineLog = true;
+        var normalizedPath = Path.GetFullPath(sourceFullPath.Trim());
+        var entry = (result.EngineLog, normalizedPath);
+        if (SelectedCandidate is not null)
+        {
+            _incidentEngineLogs[SelectedCandidate.Model.IncidentId] = entry;
+        }
+        else
+        {
+            _standaloneEngineLog = entry;
+        }
 
-        var log = result.EngineLog;
+        SyncAttachedLogUiForSelectedCandidate();
+        EngineLogFeedbackMessage = SelectedCandidate is null
+            ? "已安全解析所选日志；当前无 Windows 故障事件候选，已保留该日志摘要供参考。"
+            : $"已将所选日志单独绑定至当前事故 ({SelectedCandidate.DisplayTitle}) 并重新评估结论。";
+
+        RebuildReport();
+    }
+
+    private (UserConfirmedEngineLog Log, string FullPath)? GetActiveAttachedEngineLogEntry()
+    {
+        if (SelectedCandidate is not null)
+        {
+            return _incidentEngineLogs.TryGetValue(SelectedCandidate.Model.IncidentId, out var entry)
+                ? entry
+                : null;
+        }
+
+        return _standaloneEngineLog;
+    }
+
+    private void SyncAttachedLogUiForSelectedCandidate()
+    {
+        var active = GetActiveAttachedEngineLogEntry();
+        if (active is null)
+        {
+            HasAttachedEngineLog = false;
+            AttachedEngineLogSummary = "尚未确认关联任何游戏引擎日志";
+            EngineLogFeedbackMessage = string.Empty;
+            return;
+        }
+
+        var log = active.Value.Log;
+        HasAttachedEngineLog = true;
         var sigs = new List<string>();
         if (!string.IsNullOrWhiteSpace(log.EngineVersion)) sigs.Add($"引擎 {log.EngineVersion}");
         if (!string.IsNullOrWhiteSpace(log.RhiBackend)) sigs.Add(log.RhiBackend);
@@ -445,11 +513,6 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         if (log.IsTruncated) sigs.Add("已截断末尾 2 MiB");
 
         AttachedEngineLogSummary = $"{log.SourceLocation}" + (sigs.Count > 0 ? $" · {string.Join(" | ", sigs)}" : string.Empty);
-        EngineLogFeedbackMessage = SelectedCandidate is null
-            ? "已安全解析所选日志；当前无 Windows 故障事件候选，已保留该日志摘要供参考。"
-            : "已将所选日志关联至当前事故并重新评估诊断结论。";
-
-        RebuildReport();
     }
 
     private void PopulateDiscoveredLogs(IReadOnlyList<DiscoveredEngineLogCandidate> discovered)
@@ -528,7 +591,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         var report = _coordinator.BuildDiagnosisReport(
             _currentSession,
             SelectedCandidate?.Model,
-            _confirmedEngineLog);
+            GetActiveAttachedEngineLogEntry()?.Log);
         CurrentReport = report;
 
         ReportHeaderSummary = report.SelectedIncident is null
@@ -605,8 +668,8 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         var gpuText = env.GpuAdapters.Count == 0
             ? "未检测到适配器"
             : string.Join("；", env.GpuAdapters.Select(static g =>
-                $"{g.Name}（驱动 {g.DriverVersion ?? "未知"}，发布日期 {g.DriverReleaseDateIso ?? "未知"}{(g.IsLikelyVirtual ? "，虚拟适配器" : string.Empty)}）"));
-        EnvironmentItems.Add(new EnvironmentFactRowViewModel("1. 显卡与驱动发布日期", gpuText, "信息", EnvironmentNoticeLevel.Info));
+                $"{g.Name}（驱动 {g.DriverVersion ?? "未知"}，驱动包日期 {g.DriverReleaseDateIso ?? "未知"}{(g.IsLikelyVirtual ? "，虚拟适配器" : string.Empty)}）"));
+        EnvironmentItems.Add(new EnvironmentFactRowViewModel("1. 显卡与驱动包日期", gpuText, "信息", EnvironmentNoticeLevel.Info));
 
         var pathText = !env.TargetPath.Checked
             ? "未选中具体故障程序，未检查路径特征"
@@ -622,7 +685,8 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             ToNoticeLabel(env.OneDriveDocs.NoticeLevel),
             env.OneDriveDocs.NoticeLevel));
 
-        var vcText = $"x64: {(env.VcRuntime.X64Installed ? $"已装 ({env.VcRuntime.X64Version})" : "未检测到")} | x86: {(env.VcRuntime.X86Installed ? $"已装 ({env.VcRuntime.X86Version})" : "未检测到")}";
+        var vcMissing = env.VcRuntime.NoticeLevel == EnvironmentNoticeLevel.Unavailable ? "探测不可用" : "未检测到登记";
+        var vcText = $"x64: {(env.VcRuntime.X64Installed ? $"已装 ({env.VcRuntime.X64Version})" : vcMissing)} | x86: {(env.VcRuntime.X86Installed ? $"已装 ({env.VcRuntime.X86Version})" : vcMissing)}";
         EnvironmentItems.Add(new EnvironmentFactRowViewModel(
             "4. VC++ 2015-2022 运行库",
             vcText,
@@ -685,7 +749,8 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         _activeScanCts?.Dispose();
         _activeScanCts = null;
         _currentSession = null;
-        _confirmedEngineLog = null;
+        _incidentEngineLogs.Clear();
+        _standaloneEngineLog = null;
         CurrentReport = null;
         Candidates.Clear();
         DiscoveredEngineLogs.Clear();

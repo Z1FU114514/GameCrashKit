@@ -137,11 +137,31 @@ public static class IncidentCorrelator
             displayBackground.Add(new BackgroundEventRecord(evidence, AttributionStrength.NearbyOnly, "Display4101"));
         }
 
-        // 3. Link supported 1001 reports to compatible anchors using strict priority rules.
+        // 3. Link supported 1001 reports to compatible anchors using strict two-pass priority rules:
+        //    Pass 1: link unique non-zero ReportId matches first so weak matches never steal a direct pair.
+        //    Pass 2: link remaining unlinked 1001 reports by unique path or PID+CreationTime (blocking conflicting ReportIds).
         var standaloneWerCandidates = new List<CrashIncident>();
+        var unlinkedWerEntries = new List<WerBuilder>(werEntries.Count);
         foreach (var wer in werEntries)
         {
-            if (TryLinkWerToAnchor(wer, anchors, options.WerTimeWindowSeconds, out var ambiguityNote))
+            var status = TryLinkWerPass1DirectReportId(wer, anchors, out var directNote);
+            if (status == WerPassResult.Linked)
+            {
+                continue;
+            }
+
+            if (status == WerPassResult.AmbiguousStop)
+            {
+                standaloneWerCandidates.Add(wer.ToStandaloneIncident(directNote));
+                continue;
+            }
+
+            unlinkedWerEntries.Add(wer);
+        }
+
+        foreach (var wer in unlinkedWerEntries)
+        {
+            if (TryLinkWerPass2Probable(wer, anchors, options.WerTimeWindowSeconds, out var ambiguityNote))
             {
                 continue;
             }
@@ -210,7 +230,48 @@ public static class IncidentCorrelator
             AllEvidence: allEvidence);
     }
 
-    private static bool TryLinkWerToAnchor(
+    private enum WerPassResult
+    {
+        NotMatched = 0,
+        Linked,
+        AmbiguousStop
+    }
+
+    private static WerPassResult TryLinkWerPass1DirectReportId(
+        WerBuilder wer,
+        List<AnchorBuilder> anchors,
+        out string? ambiguityNote)
+    {
+        ambiguityNote = null;
+        var werReportId = NormalizeGuid(wer.Report.ReportId);
+        if (werReportId is null)
+        {
+            return WerPassResult.NotMatched;
+        }
+
+        var p1Matches = anchors.Where(a =>
+                a.LinkedWerEvidence is null &&
+                IsCompatibleWerAnchor(wer.Report.EventName, a.AnchorKind) &&
+                string.Equals(NormalizeGuid(a.ReportId), werReportId, StringComparison.OrdinalIgnoreCase) &&
+                !HasAppNameConflict(wer.AppNameHint, a.AppName))
+            .ToList();
+
+        if (p1Matches.Count == 1)
+        {
+            p1Matches[0].AttachWer(wer.Evidence, AttributionStrength.Direct);
+            return WerPassResult.Linked;
+        }
+
+        if (p1Matches.Count > 1)
+        {
+            ambiguityNote = "存在多个 ReportId 相同的候选事件，WER 报告保持独立未自动合并。";
+            return WerPassResult.AmbiguousStop;
+        }
+
+        return WerPassResult.NotMatched;
+    }
+
+    private static bool TryLinkWerPass2Probable(
         WerBuilder wer,
         List<AnchorBuilder> anchors,
         int werTimeWindowSeconds,
@@ -218,42 +279,22 @@ public static class IncidentCorrelator
     {
         ambiguityNote = null;
 
-        // Priority 1: Direct ReportId match on compatible, unlinked, non-conflicting unique anchor.
-        var werReportId = NormalizeGuid(wer.Report.ReportId);
-        if (werReportId is not null)
-        {
-            var p1Matches = anchors.Where(a =>
-                    a.LinkedWerEvidence is null &&
-                    IsCompatibleWerAnchor(wer.Report.EventName, a.AnchorKind) &&
-                    string.Equals(NormalizeGuid(a.ReportId), werReportId, StringComparison.OrdinalIgnoreCase) &&
-                    !HasAppNameConflict(wer.AppNameHint, a.AppName))
-                .ToList();
-
-            if (p1Matches.Count == 1)
-            {
-                p1Matches[0].AttachWer(wer.Evidence, AttributionStrength.Direct);
-                return true;
-            }
-
-            if (p1Matches.Count > 1)
-            {
-                ambiguityNote = "存在多个 ReportId 相同的候选事件，WER 报告保持独立未自动合并。";
-                return false;
-            }
-        }
-
         // Priority 2: Probable match ONLY via unique (NormalizedFullPath OR (FaultingPID + ProcessCreationTime)) within ±120s.
+        // Never weak-link when BOTH sides carry distinct non-empty non-zero ReportIds.
         var werTime = wer.Report.Source.TimeCreatedUtc;
         if (!werTime.HasValue)
         {
             return false;
         }
 
+        var werReportId = NormalizeGuid(wer.Report.ReportId);
+
         if (wer.NormalizedRootedPath is not null)
         {
             var pathMatches = anchors.Where(a =>
                     a.LinkedWerEvidence is null &&
                     IsCompatibleWerAnchor(wer.Report.EventName, a.AnchorKind) &&
+                    !HasConflictingReportId(werReportId, NormalizeGuid(a.ReportId)) &&
                     a.OccurredAtUtc.HasValue &&
                     Math.Abs((werTime.Value - a.OccurredAtUtc.Value).TotalSeconds) <= werTimeWindowSeconds &&
                     string.Equals(a.NormalizedAppPath, wer.NormalizedRootedPath, StringComparison.OrdinalIgnoreCase))
@@ -280,6 +321,7 @@ public static class IncidentCorrelator
             var pidTimeMatches = anchors.Where(a =>
                     a.LinkedWerEvidence is null &&
                     IsCompatibleWerAnchor(wer.Report.EventName, a.AnchorKind) &&
+                    !HasConflictingReportId(werReportId, NormalizeGuid(a.ReportId)) &&
                     a.OccurredAtUtc.HasValue &&
                     Math.Abs((werTime.Value - a.OccurredAtUtc.Value).TotalSeconds) <= werTimeWindowSeconds &&
                     !HasAppNameConflict(wer.AppNameHint, a.AppName) &&
@@ -302,6 +344,11 @@ public static class IncidentCorrelator
 
         return false;
     }
+
+    private static bool HasConflictingReportId(string? normalizedWerReportId, string? normalizedAnchorReportId) =>
+        normalizedWerReportId is not null &&
+        normalizedAnchorReportId is not null &&
+        !string.Equals(normalizedWerReportId, normalizedAnchorReportId, StringComparison.OrdinalIgnoreCase);
 
     private static List<CrashIncident> AggregateRepeatedIncidents(List<CrashIncident> incidents)
     {
@@ -332,10 +379,22 @@ public static class IncidentCorrelator
                 .Select(static i => i.OccurredAtUtc!.Value)
                 .ToList();
 
+            var bestWer = representative.LinkedWerEvidence is not null
+                ? representative
+                : ordered.FirstOrDefault(static i => i.LinkedWerEvidence is not null);
+
+            var mergedNotes = ordered
+                .SelectMany(static i => i.AmbiguityNotes)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
             result.Add(representative with
             {
                 OccurrenceCountInWindow = ordered.Count,
-                OccurrenceTimestampsUtc = timestamps
+                OccurrenceTimestampsUtc = timestamps,
+                LinkedWerEvidence = bestWer?.LinkedWerEvidence ?? representative.LinkedWerEvidence,
+                WerLinkAttribution = bestWer?.WerLinkAttribution ?? representative.WerLinkAttribution,
+                AmbiguityNotes = mergedNotes
             });
         }
 

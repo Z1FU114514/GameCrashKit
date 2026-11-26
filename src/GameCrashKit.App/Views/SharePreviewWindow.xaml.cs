@@ -14,10 +14,25 @@ public partial class SharePreviewWindow : Window
     {
         InitializeComponent();
         DarkTitleBarHelper.Apply(this);
+        ClampToWorkArea();
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         DataContext = _viewModel;
 
         InputBindings.Add(new KeyBinding(new RelayCommand(Close), new KeyGesture(Key.Escape)));
+    }
+
+    private void ClampToWorkArea()
+    {
+        var workArea = SystemParameters.WorkArea;
+        if (workArea.Width > 0 && Width > workArea.Width - 20)
+        {
+            Width = Math.Max(MinWidth, workArea.Width - 20);
+        }
+
+        if (workArea.Height > 0 && Height > workArea.Height - 20)
+        {
+            Height = Math.Max(MinHeight, workArea.Height - 20);
+        }
     }
 
     private void SavePngButton_Click(object sender, RoutedEventArgs e)

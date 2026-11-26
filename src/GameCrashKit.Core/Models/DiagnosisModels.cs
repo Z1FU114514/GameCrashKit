@@ -26,4 +26,5 @@ public sealed record DiagnosisReport(
     IReadOnlyList<BackgroundEventRecord> SystemBackgroundEvents,
     IReadOnlyList<SourceCoverage> Coverage,
     EnvironmentSnapshot? Environment,
-    IReadOnlyList<EvidenceItem> AllEvidence);
+    IReadOnlyList<EvidenceItem> AllEvidence,
+    IReadOnlyList<DiagnosisFinding>? AdditionalHints = null);

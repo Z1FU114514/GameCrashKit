@@ -128,7 +128,7 @@ public sealed class WindowsScanCoordinator
         ScanSessionResult session,
         CrashIncident? selectedIncident,
         UserConfirmedEngineLog? confirmedEngineLog = null,
-        string appVersion = "0.1.0-alpha")
+        string? appVersion = null)
     {
         ArgumentNullException.ThrowIfNull(session);
 

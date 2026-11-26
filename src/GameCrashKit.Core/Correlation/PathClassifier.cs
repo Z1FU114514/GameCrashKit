@@ -149,6 +149,89 @@ public static partial class PathClassifier
         return @"...\" + string.Join('\\', segments[^3..]);
     }
 
+    /// <summary>
+    /// Builds a coarse, zero-PII install source category suitable for shared reports.
+    /// Never exposes private folder names, drive letters, usernames, or LAN IP addresses.
+    /// </summary>
+    public static string BuildShareSafeInstallSource(string? fullPath, bool isLikelyGame)
+    {
+        var normalized = NormalizePath(fullPath);
+        if (normalized is null)
+        {
+            return "未知位置";
+        }
+
+        if (normalized.Contains(@"\steamapps\", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Steam 游戏库";
+        }
+
+        if (normalized.Contains(@"\Epic Games\", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Epic Games 目录";
+        }
+
+        if (normalized.Contains(@"\XboxGames\", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Contains(@"\WindowsApps\", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Xbox / Microsoft Store 目录";
+        }
+
+        if (normalized.Contains(@"\WeGame\", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Contains(@"\WeGameApps\", StringComparison.OrdinalIgnoreCase))
+        {
+            return "WeGame 游戏目录";
+        }
+
+        if (normalized.Contains(@"\GOG Galaxy\", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Contains(@"\EA Games\", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Contains(@"\Origin Games\", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Contains(@"\Ubisoft Game Launcher\", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Contains(@"\Battle.net\", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Contains(@"\Riot Games\", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Contains(@"\miHoYo\", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Contains(@"\HoYoPlay\", StringComparison.OrdinalIgnoreCase))
+        {
+            return "主流游戏启动器目录";
+        }
+
+        if (IsWindowsSystemDirectoryPath(normalized))
+        {
+            return "Windows 系统目录";
+        }
+
+        if (normalized.Contains(@"\Program Files", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Program Files 安装目录";
+        }
+
+        if (isLikelyGame || normalized.Contains(@"\Games\", StringComparison.OrdinalIgnoreCase))
+        {
+            return "独立游戏目录（详细路径已脱敏）";
+        }
+
+        return "本地应用目录（详细路径已脱敏）";
+    }
+
+    public static bool IsInSameDirectoryOrSubtree(string? candidateFilePath, string? appExePath)
+    {
+        var normMod = NormalizePath(candidateFilePath);
+        var normApp = NormalizePath(appExePath);
+        if (normMod is null || normApp is null || !IsRootedWindowsPath(normMod) || !IsRootedWindowsPath(normApp))
+        {
+            return false;
+        }
+
+        var appDir = Path.GetDirectoryName(normApp);
+        if (string.IsNullOrWhiteSpace(appDir))
+        {
+            return false;
+        }
+
+        var prefix = appDir.TrimEnd('\\') + @"\";
+        return normMod.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+    }
+
     public static TargetPathFact EvaluateTargetPathFact(string? fullPath)
     {
         var normalized = NormalizePath(fullPath);
