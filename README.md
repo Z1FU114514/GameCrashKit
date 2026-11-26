@@ -2,7 +2,7 @@
 
 面向 Windows PC 玩家与轻度 Mod 玩家的**开源、纯本地、零提权、只读式事后游戏闪退取证与脱敏急诊单工具**。
 
-> **当前版本**：`v0.1.0-alpha.1`（公开预览版：已完成 M0–M4 开发、纯净检出 **82/82** 自动化测试、以及断网零 `.NET` 预装的 Windows 11 沙盒 **10/10** 全自动验收）。详见 [规格书](docs/SPEC_v0.1.md)、[更新日志](docs/CHANGELOG.md) 与 [项目总结与规划](docs/PROJECT_SUMMARY_AND_ROADMAP.md)。
+> **当前版本**：`v0.1.0-alpha.1`（公开预览版 · 绿色免安装，纯本地只读运行）。详见 [更新日志](docs/CHANGELOG.md) 与 [支持范围](docs/SUPPORT_MATRIX.md)。
 
 ## 核心功能与设计亮点
 
@@ -43,19 +43,14 @@ dotnet test GameCrashKit.sln -c Release --no-build
 # 一键构建绿色便携版 ZIP 与 SHA-256 校验文件
 pwsh -File scripts/Publish-Portable.ps1 -VersionLabel "v0.1.0-alpha.1"
 
-# 运行 M4 自动化发布门禁检查（含只读哈希不变校验与 20 次扫描 P95 基准）
+# 运行自动化发布检查（含只读哈希不变校验与扫描耗时基准）
 pwsh -File scripts/Verify-ReleaseGate.ps1 -PortableDir "publish\GameCrashKit-v0.1.0-alpha.1-win-x64"
 ```
 
-## 文档索引
+## 相关文档
 
-* [docs/PROJECT_SUMMARY_AND_ROADMAP.md](docs/PROJECT_SUMMARY_AND_ROADMAP.md) — 项目阶段总结（M0–M4、P0/P1 整改实录）与 v0.2/v0.3 规划
-* [docs/SPEC_v0.1.md](docs/SPEC_v0.1.md) — v0.1 最终项目方案与工程立项规格书
-* [docs/PRIVACY.md](docs/PRIVACY.md) — 双层隐私保护与白名单字段清单
-* [docs/M0_EVIDENCE_MATRIX.md](docs/M0_EVIDENCE_MATRIX.md) — 主机事件 XML 实测字段矩阵与避坑记录
-* [docs/SUPPORT_MATRIX.md](docs/SUPPORT_MATRIX.md) — 系统、语言与来源实测准入矩阵
-* [docs/M4_ACCEPTANCE_CHECKLIST.md](docs/M4_ACCEPTANCE_CHECKLIST.md) — AC-01~AC-08 验收门槛与隔离 VM 测试手册
-* [docs/USER_TRIAL_GUIDE.md](docs/USER_TRIAL_GUIDE.md) — ≥10 位真实玩家盲测试用指南与反馈表
+* [docs/PRIVACY.md](docs/PRIVACY.md) — 隐私保护与脱敏白名单说明
+* [docs/SUPPORT_MATRIX.md](docs/SUPPORT_MATRIX.md) — 支持的系统环境与崩溃日志格式
 * [docs/CHANGELOG.md](docs/CHANGELOG.md) — 版本更新日志
 
 ## 开源协议
