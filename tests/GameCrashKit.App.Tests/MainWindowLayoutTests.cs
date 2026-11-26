@@ -28,6 +28,9 @@ public sealed class MainWindowLayoutTests
                 EnsureAppResourcesLoaded();
 
                 var window = new MainWindow();
+                var bgBrush = Assert.IsAssignableFrom<SolidColorBrush>(window.Background);
+                Assert.Equal(Color.FromRgb(0x0B, 0x0E, 0x14), bgBrush.Color);
+                Assert.NotNull(window.Icon);
                 var rootContent = Assert.IsAssignableFrom<FrameworkElement>(window.Content);
                 rootContent.Measure(new Size(width - 16, height - 38));
                 rootContent.Arrange(new Rect(0, 0, width - 16, height - 38));
@@ -98,6 +101,9 @@ public sealed class MainWindowLayoutTests
                 var report = new DiagnosisRuleEngine().Evaluate(new RuleEvaluationContext(req, null, [], [], null), []);
                 var vm = new SharePreviewViewModel(report);
                 var previewWin = new SharePreviewWindow(vm);
+                var previewBg = Assert.IsAssignableFrom<SolidColorBrush>(previewWin.Background);
+                Assert.Equal(Color.FromRgb(0x0B, 0x0E, 0x14), previewBg.Color);
+                Assert.NotNull(previewWin.Icon);
 
                 var root = Assert.IsAssignableFrom<FrameworkElement>(previewWin.Content);
                 root.Measure(new Size(800, 560));

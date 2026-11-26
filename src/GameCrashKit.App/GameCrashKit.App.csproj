@@ -6,7 +6,12 @@
     <RootNamespace>GameCrashKit.App</RootNamespace>
     <AssemblyName>GameCrashKit.App</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\app.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\GameCrashKit.Core\GameCrashKit.Core.csproj" />

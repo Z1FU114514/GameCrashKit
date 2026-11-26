@@ -7,12 +7,18 @@
         Height="800"
         MinWidth="860"
         MinHeight="600"
+        Background="{StaticResource AppBackgroundBrush}"
+        Foreground="{StaticResource TextPrimaryBrush}"
+        FontFamily="Microsoft YaHei UI, Segoe UI"
+        FontSize="13"
+        Icon="pack://application:,,,/GameCrashKit.App;component/Assets/app.ico"
         AllowDrop="True"
         DragOver="Window_DragOver"
         Drop="Window_Drop"
         WindowStartupLocation="CenterScreen">
 
-    <Grid Margin="14">
+    <Border Background="{StaticResource AppBackgroundBrush}" Padding="14">
+    <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -858,4 +864,5 @@
                        Text="快捷键：F5 扫描 | Esc 取消 | Ctrl+O 选日志 | Ctrl+E 导出" />
         </Grid>
     </Grid>
+    </Border>
 </Window>

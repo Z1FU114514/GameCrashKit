@@ -6,9 +6,15 @@
         Height="790"
         MinWidth="820"
         MinHeight="580"
+        Background="{StaticResource AppBackgroundBrush}"
+        Foreground="{StaticResource TextPrimaryBrush}"
+        FontFamily="Microsoft YaHei UI, Segoe UI"
+        FontSize="13"
+        Icon="pack://application:,,,/GameCrashKit.App;component/Assets/app.ico"
         WindowStartupLocation="CenterOwner">
 
-    <Grid Margin="14">
+    <Border Background="{StaticResource AppBackgroundBrush}" Padding="14">
+    <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -219,4 +225,5 @@
                     Margin="12,0,0,0" />
         </Grid>
     </Grid>
+    </Border>
 </Window>
