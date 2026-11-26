@@ -37,10 +37,11 @@ try {
         -o $publishDir
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed with exit code $LASTEXITCODE" }
 
-    # Ensure dev/test crash tool never leaks into user release packages
-    $leakedTools = Get-ChildItem -Path $publishDir -Filter "*SyntheticCrashTool*" -ErrorAction SilentlyContinue
+    # Ensure dev/test tools never leak into user release packages
+    $leakedTools = Get-ChildItem -Path $publishDir -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like "*SyntheticCrashTool*" -or $_.Name -like "*SandboxAutoVerifier*" }
     if ($leakedTools) {
-        throw "FATAL: SyntheticCrashTool leaked into publish directory!"
+        throw "FATAL: Dev/test binary leaked into publish directory: $($leakedTools.Name -join ', ')"
     }
 
     $docFiles = @(

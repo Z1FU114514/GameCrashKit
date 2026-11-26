@@ -21,6 +21,7 @@ if (-not (Test-Path $zipPath) -or -not (Test-Path $sumPath)) {
 $kitRoot = Join-Path $publishRoot "sandbox-kit"
 $inputDir = Join-Path $kitRoot "input"
 $toolsDir = Join-Path $inputDir "tools"
+$verifierDir = Join-Path $inputDir "verifier"
 $fixturesDir = Join-Path $inputDir "fixtures"
 $outputDir = Join-Path $kitRoot "output"
 
@@ -28,9 +29,9 @@ if (Test-Path $inputDir) {
     Remove-Item $inputDir -Recurse -Force
 }
 
-New-Item -ItemType Directory -Path $inputDir, $toolsDir, $fixturesDir, $outputDir -Force | Out-Null
+New-Item -ItemType Directory -Path $inputDir, $toolsDir, $verifierDir, $fixturesDir, $outputDir -Force | Out-Null
 
-Write-Host "=== 1. Publishing Self-Contained SyntheticCrashTool (Sandbox Isolated Only) ===" -ForegroundColor Cyan
+Write-Host "=== 1a. Publishing Self-Contained SyntheticCrashTool (Sandbox Isolated Only) ===" -ForegroundColor Cyan
 dotnet publish (Join-Path $repoRoot "tests\SyntheticCrashTool\SyntheticCrashTool.csproj") `
     -c Release `
     -r win-x64 `
@@ -40,48 +41,50 @@ dotnet publish (Join-Path $repoRoot "tests\SyntheticCrashTool\SyntheticCrashTool
     -o $toolsDir
 if ($LASTEXITCODE -ne 0) { throw "SyntheticCrashTool publish failed with exit code $LASTEXITCODE" }
 
+Write-Host "=== 1b. Publishing Self-Contained SandboxAutoVerifier (Sandbox Isolated Only) ===" -ForegroundColor Cyan
+dotnet publish (Join-Path $repoRoot "tests\SandboxAutoVerifier\SandboxAutoVerifier.csproj") `
+    -c Release `
+    -r win-x64 `
+    --self-contained true `
+    -p:PublishTrimmed=false `
+    -o $verifierDir
+if ($LASTEXITCODE -ne 0) { throw "SandboxAutoVerifier publish failed with exit code $LASTEXITCODE" }
+
 Copy-Item $zipPath -Destination $inputDir -Force
 Copy-Item $sumPath -Destination $inputDir -Force
 Copy-Item (Join-Path $repoRoot "tests\Fixtures\EngineLogs\unity-player-gpu-lost.log") -Destination $fixturesDir -Force
 Copy-Item (Join-Path $repoRoot "tests\Fixtures\EngineLogs\unreal-crashcontext-oom.xml") -Destination $fixturesDir -Force
 
-Write-Host "=== 2. Generating Run-InSandbox.ps1 (PS 5.1 Compatible, UTF-8 BOM) ===" -ForegroundColor Cyan
+Write-Host "=== 2. Generating Run-InSandbox.ps1 (Unattended PS 5.1 Compatible, UTF-8 BOM) ===" -ForegroundColor Cyan
 $sandboxScriptTemplate = @'
 $ErrorActionPreference = "Continue"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-$testKitDir = "C:\Users\WDAGUtilityAccount\Desktop\GCK-TestKit"
-$outputDir  = "C:\Users\WDAGUtilityAccount\Desktop\GCK-Output"
-$appDir     = "C:\Users\WDAGUtilityAccount\Desktop\GameCrashKit-App"
-$sampleDir  = "C:\Users\WDAGUtilityAccount\Desktop\SampleLogs"
-$zipName    = "__ZIP_NAME__"
-$sumName    = "__SUM_NAME__"
+$testKitDir  = "C:\Users\WDAGUtilityAccount\Desktop\GCK-TestKit"
+$outputDir   = "C:\Users\WDAGUtilityAccount\Desktop\GCK-Output"
+$appDir      = "C:\Users\WDAGUtilityAccount\Desktop\GameCrashKit-App"
+$sampleDir   = "C:\Users\WDAGUtilityAccount\Desktop\SampleLogs"
+$zipName     = "__ZIP_NAME__"
+$sumName     = "__SUM_NAME__"
+$expectedVer = "__EXPECTED_VERSION__"
 
-$report = New-Object System.Collections.Generic.List[string]
-function Log-Line([string]$line) {
+$bootstrapLog = New-Object System.Collections.Generic.List[string]
+function Log-Boot([string]$line) {
     Write-Host $line
-    $report.Add($line)
+    $bootstrapLog.Add($line)
 }
 
-Log-Line "============================================================"
-Log-Line " GameCrash Kit 离线干净 Windows 沙盒自动化与交互验收台"
-Log-Line "============================================================"
-
-$cv = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion"
-$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-$dotnetCmd = Get-Command dotnet -ErrorAction SilentlyContinue
-Log-Line ("[1/6] 系统环境: Build {0}.{1} | UICulture={2} | IsAdmin={3}" -f $cv.CurrentBuildNumber, $cv.UBR, [Globalization.CultureInfo]::CurrentUICulture.Name, $isAdmin)
-Log-Line ("[1/6] 预装 .NET CLI: {0}" -f ($(if ($dotnetCmd) { "存在 (" + $dotnetCmd.Source + ")" } else { "未安装（符合干净环境要求）" })))
-
-$offlineOk = $false
-try {
-    $null = [System.Net.Dns]::GetHostAddresses("example.com")
-    Log-Line "[2/6] 网络隔离检查: 警告 - DNS 解析未失败，当前沙盒可能未断开网络。"
+function Fail-Bootstrap([string]$reason) {
+    Log-Boot ("[FAIL] " + $reason)
+    $bootstrapLog | Set-Content -Path (Join-Path $outputDir "sandbox-report.txt") -Encoding UTF8
+    ("FAIL " + [DateTimeOffset]::Now.ToString("yyyy-MM-dd HH:mm:ss zzz")) | Set-Content -Path (Join-Path $outputDir "sandbox-done.flag") -Encoding ASCII
+    Write-Host $reason -ForegroundColor Red
+    exit 1
 }
-catch {
-    $offlineOk = $true
-    Log-Line "[2/6] 网络隔离检查: 已确认处于完全断网状态 (DNS 不可达)。"
-}
+
+Log-Boot "============================================================"
+Log-Boot " GameCrash Kit 全自动无人值守离线 Windows 沙盒验收控制台"
+Log-Boot "============================================================"
 
 $zipFile = Join-Path $testKitDir $zipName
 $sumFile = Join-Path $testKitDir $sumName
@@ -89,78 +92,54 @@ $actualHash = (Get-FileHash $zipFile -Algorithm SHA256).Hash.ToLowerInvariant()
 $expectedLine = (Get-Content $sumFile -TotalCount 1).Trim()
 $expectedHash = ($expectedLine -split '\s+')[0].ToLowerInvariant()
 
-if ($actualHash -eq $expectedHash) {
-    Log-Line ("[3/6] 便携包 SHA-256 校验通过: {0}" -f $actualHash)
-} else {
-    Log-Line ("[3/6] 便携包 SHA-256 校验失败! 实际={0} 预期={1}" -f $actualHash, $expectedHash)
+if ($actualHash -ne $expectedHash) {
+    Fail-Bootstrap ("便携包 SHA-256 校验失败! 实际={0} 预期={1}" -f $actualHash, $expectedHash)
 }
+Log-Boot ("[1/4] 便携包 SHA-256 校验通过: {0}" -f $actualHash)
 
 if (Test-Path $appDir) { Remove-Item $appDir -Recurse -Force }
 Expand-Archive -Path $zipFile -DestinationPath $appDir -Force
-Log-Line ("[3/6] 已解压绿色便携包至: {0}" -f $appDir)
+Log-Boot ("[2/4] 已解压绿色便携包至: {0}" -f $appDir)
 
 New-Item -ItemType Directory -Path $sampleDir -Force | Out-Null
 $sampleLog = Join-Path $sampleDir "unity-player-gpu-lost.log"
 Copy-Item (Join-Path $testKitDir "fixtures\unity-player-gpu-lost.log") -Destination $sampleLog -Force
 Copy-Item (Join-Path $testKitDir "fixtures\unreal-crashcontext-oom.xml") -Destination (Join-Path $sampleDir "unreal-crashcontext-oom.xml") -Force
-$preHash = (Get-FileHash $sampleLog -Algorithm SHA256).Hash
-$preWrite = (Get-Item $sampleLog).LastWriteTimeUtc.ToString("o")
-Log-Line ("[4/6] 准备只读样本日志 (前置 SHA-256={0})" -f $preHash)
+Log-Boot ("[2/4] 已就绪只读测试日志: {0}" -f $sampleLog)
 
-Write-Host ""
-Write-Host "[5/6] 正在沙盒内部安全触发 1 次受控 0xc0000005 崩溃样本 (SyntheticCrashTool)..." -ForegroundColor Yellow
+Write-Host "[3/4] 正在触发 1 次受控 0xc0000005 崩溃样本 (SyntheticCrashTool)..." -ForegroundColor Yellow
 $crashExe = Join-Path $testKitDir "tools\SyntheticCrashTool.exe"
 $p = Start-Process -FilePath $crashExe -ArgumentList "--mode", "av", "--confirm-crash" -PassThru
 $null = $p.WaitForExit(8000)
 if (-not $p.HasExited) { $p.Kill() }
 Start-Sleep -Seconds 3
 
-$ev1000Count = 0
-try {
-    $since = [DateTime]::UtcNow.AddMinutes(-2).ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
-    $xpath = "*[System[Provider[@Name='Application Error'] and EventID=1000 and TimeCreated[@SystemTime>='$since']]]"
-    $q = New-Object System.Diagnostics.Eventing.Reader.EventLogQuery("Application", [System.Diagnostics.Eventing.Reader.PathType]::LogName, $xpath)
-    $r = New-Object System.Diagnostics.Eventing.Reader.EventLogReader($q)
-    while (($ev = $r.ReadEvent()) -ne $null) {
-        $xml = $ev.ToXml()
-        if ($xml -match "SyntheticCrashTool") { $ev1000Count++ }
-        $ev.Dispose()
-    }
-    $r.Dispose()
-} catch {
-    Log-Line ("[5/6] 读取沙盒 Event 1000 异常: " + $_.Exception.Message)
-}
-Log-Line ("[5/6] 沙盒内已确认捕获真实 Event 1000 (SyntheticCrashTool, 0xc0000005) 条数: {0}" -f $ev1000Count)
-
-Write-Host ""
-Write-Host "[6/6] 正在启动 GameCrashKit.App.exe，请按下面 4 步实测：" -ForegroundColor Cyan
-Write-Host "  1) 确认未弹出任何 UAC 管理员提权框，按 F5 扫描后，左侧应出现 SyntheticCrashTool.exe (0xc0000005)"
-Write-Host "  2) 把桌面 SampleLogs 里的 unity-player-gpu-lost.log 拖入窗口，确认触发 ENGINE-GPU-LOST@1"
-Write-Host "  3) 按 Ctrl+E 预览急诊单，分别保存 PNG 和 Markdown 到桌面 GCK-Output 文件夹"
-Write-Host "  4) 关闭 GameCrash Kit 窗口后，回到本命令行按【回车键】完成只读哈希校验与报告保存"
-Write-Host ""
-
-Start-Process -FilePath (Join-Path $appDir "GameCrashKit.App.exe")
-$null = Read-Host "完成上述界面实测并关闭软件后，请按回车键继续校验"
-
-$postHash = (Get-FileHash $sampleLog -Algorithm SHA256).Hash
-$postWrite = (Get-Item $sampleLog).LastWriteTimeUtc.ToString("o")
-$hashMatch = ($preHash -eq $postHash) -and ($preWrite -eq $postWrite)
-Log-Line ("[只读不变校验] 样本日志 SHA-256 与修改时间完全一致: {0} (Pre={1}, Post={2})" -f $hashMatch, $preHash, $postHash)
-
-$exported = @(Get-ChildItem -Path $outputDir -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne "sandbox-report.txt" })
-Log-Line ("[导出检查] GCK-Output 目录共检测到 {0} 个用户导出文件:" -f $exported.Count)
-foreach ($ef in $exported) {
-    Log-Line ("  - {0} ({1} bytes)" -f $ef.Name, $ef.Length)
+$verifierExe = Join-Path $testKitDir "verifier\SandboxAutoVerifier.exe"
+if (-not (Test-Path $verifierExe)) {
+    Fail-Bootstrap ("未找到无人值守校验器: {0}" -f $verifierExe)
 }
 
-$reportFile = Join-Path $outputDir "sandbox-report.txt"
-$report | Set-Content -Path $reportFile -Encoding UTF8
+Write-Host "[4/4] 正在运行全自动无人值守校验套件 SandboxAutoVerifier.exe ..." -ForegroundColor Cyan
+& $verifierExe `
+    --app-dir $appDir `
+    --sample-log $sampleLog `
+    --output-dir $outputDir `
+    --expected-version $expectedVer
+$verifierExit = $LASTEXITCODE
+
 Write-Host ""
-Write-Host ("沙盒实测报告已回写至宿主机: publish\sandbox-kit\output\sandbox-report.txt") -ForegroundColor Green
+if ($verifierExit -eq 0) {
+    Write-Host "[DONE] 沙盒全自动无人值守验收全部通过 (ExitCode=0)，报告与产物已写入宿主机 GCK-Output。" -ForegroundColor Green
+} else {
+    Write-Host ("[FAIL] 沙盒全自动验收存在失败项 (ExitCode={0})，请检查 sandbox-report.txt。" -f $verifierExit) -ForegroundColor Red
+}
 '@
 
-$sandboxScript = $sandboxScriptTemplate.Replace("__ZIP_NAME__", $zipName).Replace("__SUM_NAME__", $sumName)
+$expectedVer = $VersionLabel.TrimStart('v')
+$sandboxScript = $sandboxScriptTemplate.
+    Replace("__ZIP_NAME__", $zipName).
+    Replace("__SUM_NAME__", $sumName).
+    Replace("__EXPECTED_VERSION__", $expectedVer)
 $sandboxScriptPath = Join-Path $inputDir "Run-InSandbox.ps1"
 $utf8Bom = New-Object System.Text.UTF8Encoding($true)
 [System.IO.File]::WriteAllText($sandboxScriptPath, $sandboxScript, $utf8Bom)
