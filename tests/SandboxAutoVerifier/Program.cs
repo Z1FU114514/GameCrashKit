@@ -350,7 +350,8 @@ internal static class Program
         var decoded = EmergencyCardPngRenderer.CreateFrozenBitmapImage(pngResult.PngBytes);
         var dpiOk = Math.Abs(decoded.DpiX - EmergencyCardPngRenderer.TargetDpi) < 0.1 &&
                     Math.Abs(decoded.DpiY - EmergencyCardPngRenderer.TargetDpi) < 0.1;
-        var isWhiteBackground = SampleTopLeftPixelIsWhite(decoded, out var sampledRgba);
+        var bodySampleY = Math.Clamp(200, 10, Math.Max(10, decoded.PixelHeight - 10));
+        var isWhiteBodyCanvas = SamplePixelIsWhite(decoded, 10, bodySampleY, out var bodyRgba);
 
         recorder.Record(
             "Check4b.PngEmergencyCard",
@@ -358,8 +359,8 @@ internal static class Program
             pngResult.PixelWidth == EmergencyCardPngRenderer.CardWidth &&
             pngResult.PixelHeight > 0 &&
             dpiOk &&
-            isWhiteBackground,
-            $"Path={pngPath}, Size={pngResult.PixelWidth}x{pngResult.PixelHeight}, DPI={decoded.DpiX:F1}x{decoded.DpiY:F1}, TopLeftRGBA={sampledRgba}, Bytes={pngResult.PngBytes.Length}");
+            isWhiteBodyCanvas,
+            $"Path={pngPath}, Size={pngResult.PixelWidth}x{pngResult.PixelHeight}, DPI={decoded.DpiX:F1}x{decoded.DpiY:F1}, BodyCanvasRGBA(10,{bodySampleY})={bodyRgba}, Bytes={pngResult.PngBytes.Length}");
     }
 
     private static void RunPerformanceBenchmark(WindowsScanCoordinator coordinator, CheckRecorder recorder)
@@ -512,11 +513,11 @@ internal static class Program
         return bytes.Length >= expected.Length && bytes.AsSpan(0, expected.Length).SequenceEqual(expected);
     }
 
-    private static bool SampleTopLeftPixelIsWhite(BitmapSource bitmap, out string rgbaText)
+    private static bool SamplePixelIsWhite(BitmapSource bitmap, int x, int y, out string rgbaText)
     {
         var converted = new FormatConvertedBitmap(bitmap, PixelFormats.Bgra32, null, 0);
         var pixel = new byte[4];
-        converted.CopyPixels(new Int32Rect(2, 2, 1, 1), pixel, 4, 0);
+        converted.CopyPixels(new Int32Rect(x, y, 1, 1), pixel, 4, 0);
         // Bgra32 layout: [B, G, R, A]
         rgbaText = string.Create(CultureInfo.InvariantCulture, $"({pixel[2]},{pixel[1]},{pixel[0]},{pixel[3]})");
         return pixel[2] == 255 && pixel[1] == 255 && pixel[0] == 255 && pixel[3] == 255;
