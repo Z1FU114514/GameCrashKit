@@ -8,5 +8,6 @@
   <ItemGroup>
     <ProjectReference Include="..\GameCrashKit.Core\GameCrashKit.Core.csproj" />
     <PackageReference Include="System.Diagnostics.EventLog" />
+    <PackageReference Include="System.Management" />
   </ItemGroup>
 </Project>
