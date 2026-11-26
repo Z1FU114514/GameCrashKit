@@ -73,7 +73,8 @@ public sealed class SharePreviewViewModel : ViewModelBase
     }
 
     public bool CanIncludeExcerpt =>
-        _report.SelectedIncident?.ConfirmedEngineLog is not null;
+        _report.SelectedIncident?.ConfirmedEngineLog is not null ||
+        _report.StandaloneLog is not null;
 
     public bool IncludeScrubbedErrorExcerpt
     {

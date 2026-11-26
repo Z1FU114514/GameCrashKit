@@ -55,6 +55,14 @@ public sealed class DiagnosisRuleEngine
         var primaryFindings = orderedFindings.Take(MaxPrimaryFindings).ToList();
         var additionalHints = orderedFindings.Skip(MaxPrimaryFindings).ToList();
 
+        var effectiveSubjectKind = context.SubjectKind != ReportSubjectKind.InsufficientEvidence
+            ? context.SubjectKind
+            : context.SelectedIncident is not null
+                ? ReportSubjectKind.WindowsIncident
+                : context.StandaloneLog is not null
+                    ? ReportSubjectKind.StandaloneLogOnly
+                    : ReportSubjectKind.InsufficientEvidence;
+
         return new DiagnosisReport(
             SchemaVersion: ReportSchemaVersion,
             AppVersion: resolvedVersion,
@@ -67,7 +75,10 @@ public sealed class DiagnosisRuleEngine
             Coverage: context.Coverage,
             Environment: context.Environment,
             AllEvidence: allEvidence,
-            AdditionalHints: additionalHints);
+            AdditionalHints: additionalHints,
+            SubjectKind: effectiveSubjectKind,
+            StandaloneLog: context.StandaloneLog,
+            WindowsScanStateLabel: context.WindowsScanStateLabel);
     }
 
     private static int StrengthSortOrder(EvidenceStrength strength) => strength switch

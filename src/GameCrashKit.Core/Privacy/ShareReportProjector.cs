@@ -25,42 +25,77 @@ public static partial class ShareReportProjector
 
         var tz = displayTimeZone ?? TimeZoneInfo.Local;
         var inc = report.SelectedIncident;
+        var activeLog = inc?.ConfirmedEngineLog ?? report.StandaloneLog;
+        var isStandaloneLog = report.SubjectKind == ReportSubjectKind.StandaloneLogOnly || (inc is null && report.StandaloneLog is not null);
 
-        var incidentKindLabel = inc?.AnchorKind switch
+        string incidentKindLabel;
+        string appDisplayName;
+        string installSource;
+        string moduleName;
+        string exceptionCode;
+        string occurrenceSummary;
+        string timestampDisplay;
+
+        if (isStandaloneLog && activeLog is not null)
         {
-            IncidentAnchorKind.ApplicationCrash => "应用异常退出 (Event 1000)",
-            IncidentAnchorKind.ApplicationHang => "应用无响应 (Event 1002)",
-            IncidentAnchorKind.WerReportOnly => "仅有 WER 错误报告 (Event 1001)",
-            _ => "未选中应用事故（证据不足）"
-        };
+            incidentKindLabel = "来源：手选日志（独立诊断）";
+            appDisplayName = options.HideAppName ? "<已隐藏>" : activeLog.EffectiveFormatLabel;
+            var fatalityText = activeLog.Fatality switch
+            {
+                LogFatalityKind.Fatal => "致命崩溃/报错",
+                LogFatalityKind.NonFatalEnsure => "非致命 Ensure",
+                _ => "未知"
+            };
+            var winState = string.IsNullOrWhiteSpace(report.WindowsScanStateLabel) ? "未扫描" : report.WindowsScanStateLabel;
+            installSource = $"致命性: {fatalityText} | Windows: {winState}";
+            moduleName = "不适用（无 Windows 事件锚点）";
+            var tokens = activeLog.EffectiveSignals.Select(static s => s.MatchedToken).Where(static t => !string.IsNullOrWhiteSpace(t)).Distinct(StringComparer.Ordinal).ToArray();
+            exceptionCode = tokens.Length > 0 ? string.Join(" / ", tokens) : "未命中固定错误标记";
+            occurrenceSummary = activeLog.IsTruncated
+                ? "事故时间：未知（仅检查尾段 2 MiB）"
+                : "事故时间：未知（仅手选日志）";
+            timestampDisplay = activeLog.FileLastWriteUtc.HasValue
+                ? "文件修改时间：" + FormatTimestamp(activeLog.FileLastWriteUtc, options.HideExactTimestamp, tz, report.GeneratedAtUtc)
+                : "文件修改时间：未知";
+        }
+        else
+        {
+            incidentKindLabel = inc?.AnchorKind switch
+            {
+                IncidentAnchorKind.ApplicationCrash => "应用异常退出 (Event 1000)",
+                IncidentAnchorKind.ApplicationHang => "应用无响应 (Event 1002)",
+                IncidentAnchorKind.WerReportOnly => "仅有 WER 错误报告 (Event 1001)",
+                _ => "未选中应用事故（证据不足）"
+            };
 
-        var appDisplayName = inc is null
-            ? "未定位程序"
-            : options.HideAppName
-                ? "<APP>"
-                : PrivacyScrubber.SanitizeIdentifierValue(inc.AppName, scrubContext, 64, "未知程序");
+            appDisplayName = inc is null
+                ? "未定位程序"
+                : options.HideAppName
+                    ? "<APP>"
+                    : PrivacyScrubber.SanitizeIdentifierValue(inc.AppName, scrubContext, 64, "未知程序");
 
-        var installSource = inc is null
-            ? "无"
-            : options.HideAppName
-                ? "<已隐藏>"
-                : PathClassifier.BuildShareSafeInstallSource(inc.NormalizedAppPath, inc.IsLikelyGame);
+            installSource = inc is null
+                ? "无"
+                : options.HideAppName
+                    ? "<已隐藏>"
+                    : PathClassifier.BuildShareSafeInstallSource(inc.NormalizedAppPath, inc.IsLikelyGame);
 
-        var moduleName = inc is null
-            ? "无"
-            : options.HideAppName && IsSameAppModule(inc.ModuleName, inc.AppName)
-                ? "<APP_MODULE>"
-                : PrivacyScrubber.SanitizeIdentifierValue(inc.ModuleName, scrubContext, 64, "未知模块");
+            moduleName = inc is null
+                ? "无"
+                : options.HideAppName && IsSameAppModule(inc.ModuleName, inc.AppName)
+                    ? "<APP_MODULE>"
+                    : PrivacyScrubber.SanitizeIdentifierValue(inc.ModuleName, scrubContext, 64, "未知模块");
 
-        var exceptionCode = inc is null
-            ? "无"
-            : PrivacyScrubber.SanitizeIdentifierValue(inc.ExceptionCode, scrubContext, 32, inc.AnchorKind == IncidentAnchorKind.ApplicationHang ? "不适用（无响应）" : "未知");
+            exceptionCode = inc is null
+                ? "无"
+                : PrivacyScrubber.SanitizeIdentifierValue(inc.ExceptionCode, scrubContext, 32, inc.AnchorKind == IncidentAnchorKind.ApplicationHang ? "不适用（无响应）" : "未知");
 
-        var occurrenceSummary = inc is null
-            ? "0 次"
-            : $"所选扫描窗内共 {inc.OccurrenceCountInWindow} 次";
+            occurrenceSummary = inc is null
+                ? "0 次"
+                : $"所选扫描窗内共 {inc.OccurrenceCountInWindow} 次";
 
-        var timestampDisplay = FormatTimestamp(inc?.OccurredAtUtc, options.HideExactTimestamp, tz, report.GeneratedAtUtc);
+            timestampDisplay = FormatTimestamp(inc?.OccurredAtUtc, options.HideExactTimestamp, tz, report.GeneratedAtUtc);
+        }
 
         var findings = report.PrimaryFindings
             .Select(f => ProjectFinding(f, inc?.AppName, options.HideAppName, options.HideExactTimestamp, scrubContext))
@@ -81,7 +116,7 @@ public static partial class ShareReportProjector
             .Select(c => $"{c.SourceName}: {c.Status}（读取 {c.RecordsRead} 条{(c.Truncated ? "，已截断" : string.Empty)}）")
             .ToList();
 
-        var signalTemplates = BuildFixedSignalSummaryLines(inc?.ConfirmedEngineLog);
+        var signalTemplates = BuildFixedSignalSummaryLines(activeLog);
         var hasAvailableExcerptSource = signalTemplates.Count > 0;
         var scrubbedExcerpts = (options.IncludeScrubbedErrorExcerpt && hasAvailableExcerptSource)
             ? signalTemplates

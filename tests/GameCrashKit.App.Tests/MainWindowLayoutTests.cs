@@ -12,6 +12,7 @@ using Xunit;
 
 namespace GameCrashKit.App.Tests;
 
+[Collection("WpfApp")]
 public sealed class MainWindowLayoutTests
 {
     [Theory]
@@ -258,22 +259,7 @@ public sealed class MainWindowLayoutTests
         }
     }
 
-    private static void EnsureAppResourcesLoaded()
-    {
-        if (Application.Current is null)
-        {
-            _ = new Application();
-        }
-
-        if (!Application.Current!.Resources.Contains("BoolToVis"))
-        {
-            Application.Current.Resources.MergedDictionaries.Add(new ResourceDictionary
-            {
-                Source = new Uri("pack://application:,,,/GameCrashKit.App;component/Themes/CyberDarkTheme.xaml")
-            });
-            Application.Current.Resources["BoolToVis"] = new BooleanToVisibilityConverter();
-        }
-    }
+    private static void EnsureAppResourcesLoaded() => WpfTestHost.EnsureResourcesLoaded();
 
     private static void RunOnStaThread(Action action)
     {

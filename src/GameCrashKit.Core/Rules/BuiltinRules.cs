@@ -21,6 +21,7 @@ public static class BuiltinRules
         new ThirdPartyModuleHintRule(),
         new RuntimeModuleHintRule(),
         new SystemContextRule(),
+        new StandaloneLogSummaryRule(),
         new UnknownFallbackRule()
     ];
 
@@ -254,28 +255,56 @@ public static class BuiltinRules
     public sealed class EngineGpuLostRule : IDiagnosisRule
     {
         public string RuleId => "ENGINE-GPU-LOST";
-        public string RuleVersion => "1";
+        public string RuleVersion => "2";
         public int SpecificityRank => 80;
 
         public DiagnosisFinding? Evaluate(RuleEvaluationContext context)
         {
-            var log = context.SelectedIncident?.ConfirmedEngineLog;
+            var log = context.ActiveLog;
             if (log is null || !log.HasGpuDeviceLostSignal)
             {
                 return null;
             }
 
-            var has4101 = context.SelectedIncident!.NearbySystemBackground
-                .Any(static b => b.SummaryKind == "Display4101");
+            var has4101 = context.SelectedIncident is not null &&
+                context.SelectedIncident.NearbySystemBackground.Any(static b => b.SummaryKind == "Display4101");
+
+            var tokenText = string.IsNullOrWhiteSpace(log.GpuLostToken) ? "图形设备丢失信号" : log.GpuLostToken;
+
+            if (log.Fatality == LogFatalityKind.NonFatalEnsure)
+            {
+                var ensureNotes = new List<string>
+                {
+                    "所选 Unreal 上下文标记为非致命 Ensure，未证实该次记录导致进程崩溃。"
+                };
+                if (log.IsTruncated)
+                {
+                    ensureNotes.Add("日志文件超出 2 MiB 读取上限，仅解析末尾部分。");
+                }
+
+                return new DiagnosisFinding(
+                    RuleId: RuleId,
+                    RuleVersion: RuleVersion,
+                    Title: $"手选日志记录非致命 Ensure（含图形标记：{tokenText}）",
+                    Statement: $"已确认日志包含非致命 Ensure 与图形错误标记 {tokenText}，暂不能直接认定进程闪退或硬件损坏。",
+                    Attribution: AttributionStrength.UserSelected,
+                    EvidenceStrength: EvidenceStrength.LimitedClue,
+                    EvidenceIds: [$"engine-log:{log.Kind}"],
+                    AmbiguityNotes: ensureNotes,
+                    NextActionTemplateId: "CHECK_NONFATAL_ENSURE_GPU",
+                    NextActionText: "请先核对实际闪退时间点；该记录仅为非致命 Ensure，建议先勿调整显卡或系统设置。",
+                    OfficialReferenceLabel: "Microsoft Direct3D 设备丢失说明",
+                    OfficialReferenceUrl: "https://learn.microsoft.com/en-us/windows/uwp/gaming/handling-device-lost-scenarios",
+                    SpecificityRank: SpecificityRank);
+            }
 
             var strength = log.IsTruncated ? EvidenceStrength.LimitedClue : EvidenceStrength.ExplicitRecord;
-            var tokenText = string.IsNullOrWhiteSpace(log.GpuLostToken) ? "图形设备丢失信号" : log.GpuLostToken;
             var extra4101 = has4101 ? " 同时在故障前后 120 秒内记录到系统显示恢复背景事件，两者时间吻合。" : string.Empty;
 
             var ambiguity = new List<string>();
             if (log.IsTruncated)
             {
-                ambiguity.Add("日志文件超出 2 MiB 读取上限，仅解析末尾部分。");
+                ambiguity.Add("日志文件超出 2 MiB 读取上限，仅检查尾段 2 MiB。");
             }
 
             if (log.MayBeOverwritten)
@@ -287,13 +316,13 @@ public static class BuiltinRules
                 RuleId: RuleId,
                 RuleVersion: RuleVersion,
                 Title: $"手选日志记录图形错误标记 ({tokenText})",
-                Statement: $"已确认的引擎日志中明确出现 {tokenText}。{extra4101} 驱动兼容性、游戏渲染管线异常、显存压力或显卡超频/降压不稳定均可能触发该标记，目前无法直接断言硬件损坏（且该标记本身不包含具体设备移除子原因）。",
+                Statement: $"已确认的日志中明确出现 {tokenText}。{extra4101} 驱动兼容性、渲染管线异常、显存压力或超频/降压不稳定均可能触发该标记，目前无法直接断言硬件损坏（且该标记本身不包含具体设备移除子原因）。",
                 Attribution: AttributionStrength.UserSelected,
                 EvidenceStrength: strength,
                 EvidenceIds: [$"engine-log:{log.Kind}"],
                 AmbiguityNotes: ambiguity,
                 NextActionTemplateId: "CHECK_GPU_OVERCLOCK_AND_OVERLAY",
-                NextActionText: "请先核对所选日志对应的游戏名与修改时间是否匹配本次闪退；确认后建议一次仅改动一个变量对照复测（例如先恢复显卡默认频率，或先临时关闭第三方游戏叠加层）。",
+                NextActionText: "请先核对所选日志对应的程序名与修改时间是否匹配本次异常；确认后建议一次仅改动一个变量对照复测（例如先恢复默认频率，或先临时关闭第三方叠加层）。",
                 OfficialReferenceLabel: "Microsoft Direct3D 设备丢失说明",
                 OfficialReferenceUrl: "https://learn.microsoft.com/en-us/windows/uwp/gaming/handling-device-lost-scenarios",
                 SpecificityRank: SpecificityRank);
@@ -309,14 +338,10 @@ public static class BuiltinRules
         public DiagnosisFinding? Evaluate(RuleEvaluationContext context)
         {
             var inc = context.SelectedIncident;
-            if (inc is null)
-            {
-                return null;
-            }
-
-            var log = inc.ConfirmedEngineLog;
+            var log = context.ActiveLog;
             var logOom = log is { HasOutOfMemorySignal: true };
-            var codeOom = inc.AnchorKind == IncidentAnchorKind.ApplicationCrash &&
+            var codeOom = inc is not null &&
+                          inc.AnchorKind == IncidentAnchorKind.ApplicationCrash &&
                           string.Equals(inc.ExceptionCode, "0xe0000008", StringComparison.OrdinalIgnoreCase);
 
             if (!logOom && !codeOom)
@@ -327,7 +352,7 @@ public static class BuiltinRules
             var evidenceIds = new List<string>();
             if (codeOom)
             {
-                evidenceIds.Add(inc.PrimaryEvidence.EvidenceId);
+                evidenceIds.Add(inc!.PrimaryEvidence.EvidenceId);
             }
 
             if (logOom)
@@ -384,7 +409,7 @@ public static class BuiltinRules
             var ambiguity = new List<string>();
             if (log.IsTruncated)
             {
-                ambiguity.Add("日志文件超出 2 MiB 读取上限，仅解析末尾部分。");
+                ambiguity.Add("日志文件超出 2 MiB 读取上限，仅检查尾段 2 MiB。");
             }
 
             if (log.MayBeOverwritten)
@@ -403,12 +428,12 @@ public static class BuiltinRules
             var pageFileHint = allowPageFileHint
                 ? pageFile!.IsDisabled
                     ? "检测到本机当前未见活跃虚拟内存配置，若在完整崩溃中稳定复现，可核查系统托管页面文件设置。"
-                    : $"检测到本机当前已分配页面文件总量较小（{pageFile.TotalAllocatedMb} MB），建议结合游戏画质/纹理选项排查。"
+                    : $"检测到本机当前已分配页面文件总量较小（{pageFile.TotalAllocatedMb} MB），建议结合画质/纹理选项排查。"
                 : "建议先降低高显存纹理与画质选项对比复测，并关闭后台高内存占用程序。";
 
             var statement = codeOom
                 ? $"事件记录异常码 0xe0000008，同时手选日志记录到内存/显存分配失败标记（{log.OomToken ?? "OOM"}）。"
-                : $"已确认的引擎日志记录到内存/显存分配失败信号（{log.OomToken ?? "OOM"}）。";
+                : $"已确认的日志记录到内存/显存分配失败信号（{log.OomToken ?? "OOM"}）。";
 
             return new DiagnosisFinding(
                 RuleId: RuleId,
@@ -575,6 +600,102 @@ public static class BuiltinRules
         }
     }
 
+    public sealed class StandaloneLogSummaryRule : IDiagnosisRule
+    {
+        public string RuleId => "LOG-ONLY-SUMMARY";
+        public string RuleVersion => "1";
+        public int SpecificityRank => 30;
+
+        public DiagnosisFinding? Evaluate(RuleEvaluationContext context)
+        {
+            if (context.SubjectKind != ReportSubjectKind.StandaloneLogOnly || context.StandaloneLog is null)
+            {
+                return null;
+            }
+
+            var log = context.StandaloneLog;
+            var formatLabel = log.EffectiveFormatLabel;
+            var tokens = log.EffectiveSignals
+                .Select(static s => s.MatchedToken)
+                .Where(static t => !string.IsNullOrWhiteSpace(t))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            var winState = string.IsNullOrWhiteSpace(context.WindowsScanStateLabel)
+                ? "未扫描"
+                : context.WindowsScanStateLabel;
+
+            var ambiguity = new List<string>
+            {
+                $"当前未关联 Windows 应用故障事件（Windows 状态：{winState}），无法验证实际退出进程与故障模块。"
+            };
+            if (log.IsTruncated)
+            {
+                ambiguity.Add("日志文件超出 2 MiB 读取上限，仅检查尾段 2 MiB。");
+            }
+
+            if (log.MayBeOverwritten)
+            {
+                ambiguity.Add("文件可能受后续重开程序覆盖，请核对文件修改时间。");
+            }
+
+            if (log.Fatality == LogFatalityKind.NonFatalEnsure)
+            {
+                return new DiagnosisFinding(
+                    RuleId: RuleId,
+                    RuleVersion: RuleVersion,
+                    Title: $"仅手选日志诊断：{formatLabel}（非致命 Ensure）",
+                    Statement: $"已安全读取手选文件，其中标注为非致命 Ensure（未证实进程闪退）。{(tokens.Length > 0 ? $"观测到错误标记：{string.Join(" / ", tokens)}。" : string.Empty)} 未虚构任何 Windows 事件或进程归属。",
+                    Attribution: AttributionStrength.UserSelected,
+                    EvidenceStrength: EvidenceStrength.LimitedClue,
+                    EvidenceIds: [$"engine-log:{log.Kind}"],
+                    AmbiguityNotes: ambiguity,
+                    NextActionTemplateId: "STANDALONE_LOG_NONFATAL_ENSURE",
+                    NextActionText: "请先按 F5 扫描近期 Windows 事件并核对实际闪退时刻是否与此文件一致；在确认真实退出记录前，勿改动系统设置。",
+                    OfficialReferenceLabel: null,
+                    OfficialReferenceUrl: null,
+                    SpecificityRank: SpecificityRank);
+            }
+
+            if (tokens.Length > 0)
+            {
+                var fatalityLabel = log.Fatality == LogFatalityKind.Fatal ? "致命错误" : "致命性未知";
+                var strength = log.IsTruncated || log.Fatality != LogFatalityKind.Fatal
+                    ? EvidenceStrength.LimitedClue
+                    : EvidenceStrength.ExplicitRecord;
+
+                return new DiagnosisFinding(
+                    RuleId: RuleId,
+                    RuleVersion: RuleVersion,
+                    Title: $"仅手选日志诊断：{formatLabel}（{fatalityLabel}，命中标记）",
+                    Statement: $"已安全读取手选日志并观测到已知错误标记：{string.Join(" / ", tokens)}。当前报告仅反映该文件内容，不代表已证实系统级故障模块。",
+                    Attribution: AttributionStrength.UserSelected,
+                    EvidenceStrength: strength,
+                    EvidenceIds: [$"engine-log:{log.Kind}"],
+                    AmbiguityNotes: ambiguity,
+                    NextActionTemplateId: "STANDALONE_LOG_WITH_SIGNALS",
+                    NextActionText: "建议在空闲窗口按 F5 补充 Windows 事件核对实际退出进程与时刻，再导出卡片对照排查。",
+                    OfficialReferenceLabel: null,
+                    OfficialReferenceUrl: null,
+                    SpecificityRank: SpecificityRank);
+            }
+
+            return new DiagnosisFinding(
+                RuleId: RuleId,
+                RuleVersion: RuleVersion,
+                Title: $"仅手选日志诊断：{formatLabel}（已读取，未命中已知标记）",
+                Statement: "已安全只读检查该文件内容，但未在其中命中已知的图形设备丢失或资源耗尽固定标记（当前仅依据手选文本状态出具最小报告）。",
+                Attribution: AttributionStrength.UserSelected,
+                EvidenceStrength: EvidenceStrength.Insufficient,
+                EvidenceIds: [$"engine-log:{log.Kind}"],
+                AmbiguityNotes: ambiguity,
+                NextActionTemplateId: "STANDALONE_LOG_NO_SIGNAL",
+                NextActionText: "建议按 F5 扫描 Windows 事件，或确认是否选对了崩退当次的最新完整日志文件。",
+                OfficialReferenceLabel: null,
+                OfficialReferenceUrl: null,
+                SpecificityRank: SpecificityRank);
+        }
+    }
+
     public sealed class UnknownFallbackRule : IDiagnosisRule
     {
         public string RuleId => "UNKNOWN";
@@ -583,7 +704,9 @@ public static class BuiltinRules
 
         public DiagnosisFinding? Evaluate(RuleEvaluationContext context)
         {
-            if (context.SelectedIncident is not null)
+            if (context.SelectedIncident is not null ||
+                context.SubjectKind == ReportSubjectKind.StandaloneLogOnly ||
+                context.StandaloneLog is not null)
             {
                 return null;
             }

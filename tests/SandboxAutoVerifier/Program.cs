@@ -203,7 +203,7 @@ internal static class Program
                 .ToArray();
             var allFired = firedWithLog.Concat(firedWithoutLog).Distinct(StringComparer.Ordinal).ToArray();
 
-            var hasGpuLost = firedWithLog.Contains("ENGINE-GPU-LOST@1", StringComparer.Ordinal);
+            var hasGpuLost = firedWithLog.Contains("ENGINE-GPU-LOST@2", StringComparer.Ordinal);
             var hasAv = allFired.Contains("EXCEPTION-AV@1", StringComparer.Ordinal);
             var hasAppCrash = allFired.Contains("APP-CRASH@1", StringComparer.Ordinal);
 

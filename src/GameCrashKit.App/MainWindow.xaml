@@ -355,7 +355,7 @@
                                            FontSize="13.5"
                                            Foreground="{StaticResource TextPrimaryBrush}"
                                            HorizontalAlignment="Center" />
-                                <TextBlock Text="点击上方「开始只读诊断 (F5)」采集近期闪退或卡死事件；若未命中可切换 24 小时 / 7 天时间窗。"
+                                <TextBlock Text="点击上方「开始只读诊断 (F5)」采集近期闪退或卡死事件；也可随时拖入单个 .log / .txt / .xml / .runtime-xml 生成仅日志诊断卡。"
                                            FontSize="12"
                                            Foreground="{StaticResource TextSecondaryBrush}"
                                            TextWrapping="Wrap"
@@ -375,17 +375,31 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                <TextBlock Text="游戏引擎日志" FontWeight="Bold" FontSize="13.5" Foreground="{StaticResource TextPrimaryBrush}" />
-                                <TextBlock Text="需由您手动确认归属当前事故" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,1,0,0" />
+                                <TextBlock Text="应用 / 引擎日志（可独立诊断）" FontWeight="Bold" FontSize="13.5" Foreground="{StaticResource TextPrimaryBrush}" />
+                                <TextBlock Text="支持冷启动直接诊断或关联到左侧当前事故" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,1,0,0" />
                             </StackPanel>
-                            <Button Grid.Column="1"
-                                    Content="清除关联"
-                                    Style="{StaticResource SecondaryButtonStyle}"
-                                    Padding="9,3"
-                                    FontSize="11.5"
-                                    Command="{Binding ClearEngineLogCommand}"
-                                    VerticalAlignment="Center"
-                                    Margin="8,0,0,0" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="独立查看"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Padding="8,3"
+                                        FontSize="11"
+                                        Command="{Binding ViewStandaloneLogCommand}"
+                                        Visibility="{Binding CanSwitchLogViewMode, Converter={StaticResource BoolToVis}}"
+                                        Margin="0,0,6,0" />
+                                <Button Content="关联当前事故"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Padding="8,3"
+                                        FontSize="11"
+                                        Command="{Binding BindStandaloneLogToSelectedCandidateCommand}"
+                                        Visibility="{Binding CanSwitchLogViewMode, Converter={StaticResource BoolToVis}}"
+                                        Margin="0,0,6,0" />
+                                <Button Content="清除"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Padding="9,3"
+                                        FontSize="11.5"
+                                        Command="{Binding ClearEngineLogCommand}"
+                                        VerticalAlignment="Center" />
+                            </StackPanel>
                         </Grid>
 
                         <Border Background="{StaticResource InteractiveSurfaceBrush}"

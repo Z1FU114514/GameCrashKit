@@ -15,6 +15,13 @@ public sealed record DiagnosisFinding(
     string? OfficialReferenceUrl,
     int SpecificityRank);
 
+public enum ReportSubjectKind
+{
+    WindowsIncident = 0,
+    StandaloneLogOnly,
+    InsufficientEvidence
+}
+
 public sealed record DiagnosisReport(
     string SchemaVersion,
     string AppVersion,
@@ -27,4 +34,7 @@ public sealed record DiagnosisReport(
     IReadOnlyList<SourceCoverage> Coverage,
     EnvironmentSnapshot? Environment,
     IReadOnlyList<EvidenceItem> AllEvidence,
-    IReadOnlyList<DiagnosisFinding>? AdditionalHints = null);
+    IReadOnlyList<DiagnosisFinding>? AdditionalHints = null,
+    ReportSubjectKind SubjectKind = ReportSubjectKind.InsufficientEvidence,
+    UserConfirmedEngineLog? StandaloneLog = null,
+    string? WindowsScanStateLabel = null);

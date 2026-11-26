@@ -76,6 +76,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     private ScanSessionResult? _currentSession;
     private readonly Dictionary<string, (UserConfirmedEngineLog Log, string FullPath)> _incidentEngineLogs = new(StringComparer.Ordinal);
     private (UserConfirmedEngineLog Log, string FullPath)? _standaloneEngineLog;
+    private bool _isViewingStandaloneLog;
 
     private WindowPresetOption _selectedWindowPreset;
     private bool _includeAllApplications;
@@ -107,6 +108,8 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         CancelScanCommand = new RelayCommand(ExecuteCancelScan, () => IsScanning);
         AttachDiscoveredLogCommand = new RelayCommand(OnAttachDiscoveredLog);
         ClearEngineLogCommand = new RelayCommand(OnClearEngineLog, () => HasAttachedEngineLog);
+        ViewStandaloneLogCommand = new RelayCommand(OnViewStandaloneLog, () => HasAnyStandaloneOrActiveLog);
+        BindStandaloneLogToSelectedCandidateCommand = new RelayCommand(OnBindStandaloneLogToSelectedCandidate, () => HasCandidates && HasAnyStandaloneOrActiveLog);
         OpenReferenceUrlCommand = new RelayCommand(OnOpenReferenceUrl);
     }
 
@@ -114,6 +117,21 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     public string WindowTitle => $"GameCrash Kit（游戏闪退急诊室）v{AppVersionInfo.Current}";
 
     public string? ActiveAttachedEngineLogFullPath => GetActiveAttachedEngineLogEntry()?.FullPath;
+
+    public bool IsViewingStandaloneLog
+    {
+        get => _isViewingStandaloneLog;
+        private set
+        {
+            if (SetProperty(ref _isViewingStandaloneLog, value))
+            {
+                OnPropertyChanged(nameof(CanSwitchLogViewMode));
+            }
+        }
+    }
+
+    public bool HasAnyStandaloneOrActiveLog => _standaloneEngineLog is not null || HasAttachedEngineLog;
+    public bool CanSwitchLogViewMode => HasCandidates && HasAnyStandaloneOrActiveLog;
 
     public IReadOnlyList<WindowPresetOption> WindowPresets { get; }
 
@@ -206,6 +224,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         {
             if (SetProperty(ref _selectedCandidate, value))
             {
+                IsViewingStandaloneLog = false;
                 SyncAttachedLogUiForSelectedCandidate();
                 RebuildReport();
             }
@@ -222,6 +241,10 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             if (SetProperty(ref _hasAttachedEngineLog, value))
             {
                 ClearEngineLogCommand.RaiseCanExecuteChanged();
+                ViewStandaloneLogCommand.RaiseCanExecuteChanged();
+                BindStandaloneLogToSelectedCandidateCommand.RaiseCanExecuteChanged();
+                OnPropertyChanged(nameof(HasAnyStandaloneOrActiveLog));
+                OnPropertyChanged(nameof(CanSwitchLogViewMode));
             }
         }
     }
@@ -284,6 +307,8 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     public RelayCommand CancelScanCommand { get; }
     public RelayCommand AttachDiscoveredLogCommand { get; }
     public RelayCommand ClearEngineLogCommand { get; }
+    public RelayCommand ViewStandaloneLogCommand { get; }
+    public RelayCommand BindStandaloneLogToSelectedCandidateCommand { get; }
     public RelayCommand OpenReferenceUrlCommand { get; }
 
     public Task AttachManualLogFileAsync(string filePath)
@@ -303,7 +328,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         ArgumentNullException.ThrowIfNull(session);
         _currentSession = session;
         _incidentEngineLogs.Clear();
-        _standaloneEngineLog = null;
+        IsViewingStandaloneLog = false;
         PopulateCandidates(session);
         SelectedCandidate = Candidates.FirstOrDefault();
         SyncAttachedLogUiForSelectedCandidate();
@@ -362,8 +387,6 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
 
             _currentSession = session;
             _incidentEngineLogs.Clear();
-            _standaloneEngineLog = null;
-            SyncAttachedLogUiForSelectedCandidate();
 
             PopulateDiscoveredLogs(discovered);
             PopulateCandidates(session);
@@ -385,9 +408,11 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
                 UiState = AppUiState.NoRecords;
                 StatusHeadline = "未发现符合条件的应用闪退或无响应候选";
                 StatusDetail = session.Correlated.FilteredNoiseCount > 0
-                    ? $"已按默认策略过滤 {session.Correlated.FilteredNoiseCount} 条系统常见进程记录；可勾选「显示全部应用事件」或扩大时间窗、手选游戏日志。"
-                    : "请尝试切换为「最近 24 小时 / 7 天」，或从下方手动选入游戏自带崩溃日志。";
+                    ? $"已按默认策略过滤 {session.Correlated.FilteredNoiseCount} 条系统常见进程记录；可勾选「显示全部应用事件」或扩大时间窗、手选日志。"
+                    : "请尝试切换为「最近 24 小时 / 7 天」，或直接拖入单个日志生成独立诊断报告。";
+                IsViewingStandaloneLog = _standaloneEngineLog is not null;
                 SelectedCandidate = null;
+                SyncAttachedLogUiForSelectedCandidate();
                 RebuildReport();
             }
             else
@@ -395,7 +420,10 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
                 UiState = HasPartialWarning ? AppUiState.PartialCompleted : AppUiState.ReadyWithReport;
                 StatusHeadline = $"扫描完成：共发现 {Candidates.Count} 个事故候选";
                 StatusDetail = "请在左侧核对并确认对应程序与时间点；右侧结论与下一步已按当前选中事故实时生成。";
+                IsViewingStandaloneLog = false;
                 SelectedCandidate = Candidates[0];
+                SyncAttachedLogUiForSelectedCandidate();
+                RebuildReport();
             }
         }
         catch (OperationCanceledException)
@@ -439,17 +467,53 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
 
     private void OnClearEngineLog()
     {
-        if (SelectedCandidate is not null)
+        if (IsViewingStandaloneLog || SelectedCandidate is null)
         {
-            _incidentEngineLogs.Remove(SelectedCandidate.Model.IncidentId);
+            _standaloneEngineLog = null;
+            IsViewingStandaloneLog = false;
         }
         else
         {
-            _standaloneEngineLog = null;
+            _incidentEngineLogs.Remove(SelectedCandidate.Model.IncidentId);
         }
 
         SyncAttachedLogUiForSelectedCandidate();
-        EngineLogFeedbackMessage = "已取消当前选中事故的引擎日志关联。";
+        EngineLogFeedbackMessage = "已取消当前选中视图的日志关联。";
+        RebuildReport();
+    }
+
+    private void OnViewStandaloneLog()
+    {
+        var active = GetActiveAttachedEngineLogEntry() ?? _standaloneEngineLog;
+        if (active is null)
+        {
+            return;
+        }
+
+        _standaloneEngineLog = active;
+        IsViewingStandaloneLog = true;
+        SyncAttachedLogUiForSelectedCandidate();
+        EngineLogFeedbackMessage = "已切换为「仅手选日志独立诊断」视图（不虚构 Windows 事件或进程归属）。";
+        RebuildReport();
+    }
+
+    private void OnBindStandaloneLogToSelectedCandidate()
+    {
+        if (SelectedCandidate is null)
+        {
+            return;
+        }
+
+        var active = GetActiveAttachedEngineLogEntry() ?? _standaloneEngineLog;
+        if (active is null)
+        {
+            return;
+        }
+
+        _incidentEngineLogs[SelectedCandidate.Model.IncidentId] = active.Value;
+        IsViewingStandaloneLog = false;
+        SyncAttachedLogUiForSelectedCandidate();
+        EngineLogFeedbackMessage = $"已将所选日志关联至当前事故 ({SelectedCandidate.DisplayTitle}) 并重新评估结论。";
         RebuildReport();
     }
 
@@ -463,33 +527,35 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
 
         var normalizedPath = Path.GetFullPath(sourceFullPath.Trim());
         var entry = (result.EngineLog, normalizedPath);
-        if (SelectedCandidate is not null)
+        _standaloneEngineLog = entry;
+
+        if (!IsViewingStandaloneLog && SelectedCandidate is not null)
         {
             _incidentEngineLogs[SelectedCandidate.Model.IncidentId] = entry;
+            EngineLogFeedbackMessage = $"已将所选日志单独绑定至当前事故 ({SelectedCandidate.DisplayTitle}) 并重新评估结论。";
         }
         else
         {
-            _standaloneEngineLog = entry;
+            IsViewingStandaloneLog = true;
+            EngineLogFeedbackMessage = _currentSession is null
+                ? "已安全读取手选日志并生成独立诊断报告（Windows: 未扫描，可随时按 F5 补充事件扫描）。"
+                : "已安全读取手选日志并生成仅日志独立诊断报告。";
         }
 
         SyncAttachedLogUiForSelectedCandidate();
-        EngineLogFeedbackMessage = SelectedCandidate is null
-            ? "已安全解析所选日志；当前无 Windows 故障事件候选，已保留该日志摘要供参考。"
-            : $"已将所选日志单独绑定至当前事故 ({SelectedCandidate.DisplayTitle}) 并重新评估结论。";
-
         RebuildReport();
     }
 
     private (UserConfirmedEngineLog Log, string FullPath)? GetActiveAttachedEngineLogEntry()
     {
-        if (SelectedCandidate is not null)
+        if (IsViewingStandaloneLog || SelectedCandidate is null)
         {
-            return _incidentEngineLogs.TryGetValue(SelectedCandidate.Model.IncidentId, out var entry)
-                ? entry
-                : null;
+            return _standaloneEngineLog;
         }
 
-        return _standaloneEngineLog;
+        return _incidentEngineLogs.TryGetValue(SelectedCandidate.Model.IncidentId, out var entry)
+            ? entry
+            : null;
     }
 
     private void SyncAttachedLogUiForSelectedCandidate()
@@ -498,8 +564,12 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         if (active is null)
         {
             HasAttachedEngineLog = false;
-            AttachedEngineLogSummary = "尚未确认关联任何游戏引擎日志";
+            AttachedEngineLogSummary = "尚未确认关联任何游戏引擎或应用日志";
             EngineLogFeedbackMessage = string.Empty;
+            OnPropertyChanged(nameof(HasAnyStandaloneOrActiveLog));
+            OnPropertyChanged(nameof(CanSwitchLogViewMode));
+            ViewStandaloneLogCommand.RaiseCanExecuteChanged();
+            BindStandaloneLogToSelectedCandidateCommand.RaiseCanExecuteChanged();
             return;
         }
 
@@ -508,11 +578,17 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         var sigs = new List<string>();
         if (!string.IsNullOrWhiteSpace(log.EngineVersion)) sigs.Add($"引擎 {log.EngineVersion}");
         if (!string.IsNullOrWhiteSpace(log.RhiBackend)) sigs.Add(log.RhiBackend);
-        if (log.HasGpuDeviceLostSignal) sigs.Add($"图形设备丢失: {log.GpuLostToken}");
-        if (log.HasOutOfMemorySignal) sigs.Add($"内存/显存不足: {log.OomToken}");
+        if (log.Fatality == LogFatalityKind.NonFatalEnsure) sigs.Add("非致命 Ensure");
+        else if (log.Fatality == LogFatalityKind.Fatal) sigs.Add("致命错误");
+        if (log.HasGpuDeviceLostSignal) sigs.Add($"图形错误标记: {log.GpuLostToken}");
+        if (log.HasOutOfMemorySignal) sigs.Add($"资源耗尽标记: {log.OomToken}");
         if (log.IsTruncated) sigs.Add("已截断末尾 2 MiB");
 
         AttachedEngineLogSummary = $"{log.SourceLocation}" + (sigs.Count > 0 ? $" · {string.Join(" | ", sigs)}" : string.Empty);
+        OnPropertyChanged(nameof(HasAnyStandaloneOrActiveLog));
+        OnPropertyChanged(nameof(CanSwitchLogViewMode));
+        ViewStandaloneLogCommand.RaiseCanExecuteChanged();
+        BindStandaloneLogToSelectedCandidateCommand.RaiseCanExecuteChanged();
     }
 
     private void PopulateDiscoveredLogs(IReadOnlyList<DiscoveredEngineLogCandidate> discovered)
@@ -570,6 +646,9 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
 
         OnPropertyChanged(nameof(HasCandidates));
         OnPropertyChanged(nameof(ShowNoCandidatesEmptyState));
+        OnPropertyChanged(nameof(CanSwitchLogViewMode));
+        ViewStandaloneLogCommand.RaiseCanExecuteChanged();
+        BindStandaloneLogToSelectedCandidateCommand.RaiseCanExecuteChanged();
     }
 
     private void RebuildReport()
@@ -580,7 +659,10 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         CoverageItems.Clear();
         EnvironmentItems.Clear();
 
-        if (_currentSession is null)
+        var activeLog = GetActiveAttachedEngineLogEntry()?.Log;
+        var forceStandalone = IsViewingStandaloneLog && _standaloneEngineLog is not null;
+
+        if (_currentSession is null && activeLog is null)
         {
             CurrentReport = null;
             ReportHeaderSummary = "尚未执行扫描";
@@ -590,13 +672,19 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
 
         var report = _coordinator.BuildDiagnosisReport(
             _currentSession,
-            SelectedCandidate?.Model,
-            GetActiveAttachedEngineLogEntry()?.Log);
+            forceStandalone ? null : SelectedCandidate?.Model,
+            activeLog,
+            forceStandaloneLog: forceStandalone);
         CurrentReport = report;
 
-        ReportHeaderSummary = report.SelectedIncident is null
-            ? $"证据不足报告 · 规则集 {report.RulesetVersion}"
-            : $"{report.SelectedIncident.AppName ?? "未知程序"} · 规则集 {report.RulesetVersion}";
+        ReportHeaderSummary = report.SubjectKind switch
+        {
+            ReportSubjectKind.StandaloneLogOnly when report.StandaloneLog is not null =>
+                $"仅手选日志诊断 · {report.StandaloneLog.EffectiveFormatLabel} · 规则集 {report.RulesetVersion}",
+            ReportSubjectKind.WindowsIncident when report.SelectedIncident is not null =>
+                $"{report.SelectedIncident.AppName ?? "未知程序"} · 规则集 {report.RulesetVersion}",
+            _ => $"证据不足报告 · 规则集 {report.RulesetVersion}"
+        };
 
         foreach (var f in report.PrimaryFindings)
         {

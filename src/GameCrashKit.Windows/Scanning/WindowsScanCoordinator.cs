@@ -125,12 +125,50 @@ public sealed class WindowsScanCoordinator
     }
 
     public DiagnosisReport BuildDiagnosisReport(
-        ScanSessionResult session,
+        ScanSessionResult? session,
         CrashIncident? selectedIncident,
         UserConfirmedEngineLog? confirmedEngineLog = null,
-        string? appVersion = null)
+        string? appVersion = null,
+        bool forceStandaloneLog = false)
     {
-        ArgumentNullException.ThrowIfNull(session);
+        var scanStateLabel = ResolveWindowsScanStateLabel(session, selectedIncident);
+        var useStandaloneLog = (forceStandaloneLog || selectedIncident is null) && confirmedEngineLog is not null;
+
+        if (useStandaloneLog)
+        {
+            var standaloneRequest = session?.Request ?? CreateFallbackRequest();
+            var standaloneContext = new RuleEvaluationContext(
+                Request: standaloneRequest,
+                SelectedIncident: null,
+                SystemBackgroundEvents: session?.Correlated.SystemBackgroundEvents ?? [],
+                Coverage: session?.Coverage ?? [],
+                Environment: session?.Environment,
+                StandaloneLog: confirmedEngineLog,
+                SubjectKind: ReportSubjectKind.StandaloneLogOnly,
+                WindowsScanStateLabel: scanStateLabel);
+
+            return _ruleEngine.Evaluate(
+                standaloneContext,
+                session?.Correlated.AllEvidence ?? [],
+                appVersion);
+        }
+
+        if (session is null)
+        {
+            var emptyRequest = CreateFallbackRequest();
+            return _ruleEngine.Evaluate(
+                new RuleEvaluationContext(
+                    Request: emptyRequest,
+                    SelectedIncident: null,
+                    SystemBackgroundEvents: [],
+                    Coverage: [],
+                    Environment: null,
+                    StandaloneLog: null,
+                    SubjectKind: ReportSubjectKind.InsufficientEvidence,
+                    WindowsScanStateLabel: "未扫描"),
+                [],
+                appVersion);
+        }
 
         var incidentWithEngine = selectedIncident is not null && confirmedEngineLog is not null
             ? selectedIncident with { ConfirmedEngineLog = confirmedEngineLog }
@@ -145,14 +183,42 @@ public sealed class WindowsScanCoordinator
             };
         }
 
+        var subjectKind = incidentWithEngine is not null
+            ? ReportSubjectKind.WindowsIncident
+            : ReportSubjectKind.InsufficientEvidence;
+
         var context = new RuleEvaluationContext(
             Request: session.Request,
             SelectedIncident: incidentWithEngine,
             SystemBackgroundEvents: session.Correlated.SystemBackgroundEvents,
             Coverage: session.Coverage,
-            Environment: environment);
+            Environment: environment,
+            StandaloneLog: null,
+            SubjectKind: subjectKind,
+            WindowsScanStateLabel: scanStateLabel);
 
         return _ruleEngine.Evaluate(context, session.Correlated.AllEvidence, appVersion);
+    }
+
+    private static ScanRequest CreateFallbackRequest()
+    {
+        var nowUtc = DateTimeOffset.UtcNow;
+        return new ScanRequest(nowUtc.AddHours(-2), nowUtc, false, 0);
+    }
+
+    private static string ResolveWindowsScanStateLabel(ScanSessionResult? session, CrashIncident? selectedIncident)
+    {
+        if (session is null)
+        {
+            return "未扫描";
+        }
+
+        if (session.TimedOut || session.Coverage.Any(static c => c.Status != SourceCoverageStatus.Ok))
+        {
+            return selectedIncident is not null ? "已扫描（部分来源受限）" : "已扫描无匹配 / 部分来源受限";
+        }
+
+        return selectedIncident is not null ? "已定位 Windows 应用事件" : "已扫描无匹配";
     }
 
     private static async Task<EventChannelReadResult> ExtractChannelResultAsync(

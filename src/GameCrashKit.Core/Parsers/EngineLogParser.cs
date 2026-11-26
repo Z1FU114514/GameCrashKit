@@ -124,6 +124,8 @@ public static class EngineLogParser
         var hasCrashMarker = lines.Any(static l => l.Contains("Crash!!!", StringComparison.OrdinalIgnoreCase));
         var fatality = (hasGpuLost || hasOom || hasCrashMarker) ? LogFatalityKind.Fatal : LogFatalityKind.Unknown;
 
+        var signals = BuildSignalMatches(hasGpuLost, gpuToken, hasOom, oomToken);
+
         return new UserConfirmedEngineLog(
             Kind: EngineLogKind.Unity,
             DisplayLabel: displayLabel,
@@ -138,7 +140,9 @@ public static class EngineLogParser
             HasOutOfMemorySignal: hasOom,
             OomToken: oomToken,
             RawErrorExcerptLines: excerpts,
-            Fatality: fatality);
+            Fatality: fatality,
+            Signals: signals,
+            FormatDisplayLabel: UserConfirmedEngineLog.GetFormatDisplayLabel(EngineLogKind.Unity));
     }
 
     public static UserConfirmedEngineLog ParseUnrealCrashContextXml(
@@ -208,6 +212,8 @@ public static class EngineLogParser
             : candidateLines;
         var excerpts = BuildCappedExcerpts(excerptSource);
 
+        var signals = BuildSignalMatches(hasGpuLost, gpuToken, hasOom, oomToken);
+
         return new UserConfirmedEngineLog(
             Kind: EngineLogKind.Unreal,
             DisplayLabel: displayLabel,
@@ -222,7 +228,9 @@ public static class EngineLogParser
             HasOutOfMemorySignal: hasOom,
             OomToken: oomToken,
             RawErrorExcerptLines: excerpts,
-            Fatality: fatality);
+            Fatality: fatality,
+            Signals: signals,
+            FormatDisplayLabel: UserConfirmedEngineLog.GetFormatDisplayLabel(EngineLogKind.Unreal));
     }
 
     public static UserConfirmedEngineLog ParseGenericManualLog(
@@ -251,6 +259,8 @@ public static class EngineLogParser
         var (hasOom, oomToken) = DetectFirstToken(lines, OomTokens);
         var excerpts = ExtractSignalExcerptLines(lines);
 
+        var signals = BuildSignalMatches(hasGpuLost, gpuToken, hasOom, oomToken);
+
         return new UserConfirmedEngineLog(
             Kind: EngineLogKind.GenericManual,
             DisplayLabel: displayLabel,
@@ -264,7 +274,30 @@ public static class EngineLogParser
             GpuLostToken: gpuToken,
             HasOutOfMemorySignal: hasOom,
             OomToken: oomToken,
-            RawErrorExcerptLines: excerpts);
+            RawErrorExcerptLines: excerpts,
+            Fatality: LogFatalityKind.Unknown,
+            Signals: signals,
+            FormatDisplayLabel: UserConfirmedEngineLog.GetFormatDisplayLabel(EngineLogKind.GenericManual));
+    }
+
+    private static IReadOnlyList<LogSignalMatch> BuildSignalMatches(
+        bool hasGpuLost,
+        string? gpuToken,
+        bool hasOom,
+        string? oomToken)
+    {
+        var list = new List<LogSignalMatch>(2);
+        if (hasGpuLost)
+        {
+            list.Add(new LogSignalMatch(LogSignalId.GpuDeviceLost, gpuToken ?? "GPU_DEVICE_LOST"));
+        }
+
+        if (hasOom)
+        {
+            list.Add(new LogSignalMatch(LogSignalId.OutOfMemory, oomToken ?? "OUT_OF_MEMORY"));
+        }
+
+        return list;
     }
 
     private static List<string> SplitBoundedLines(string content)

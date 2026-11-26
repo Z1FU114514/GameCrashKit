@@ -7,7 +7,13 @@ public sealed record RuleEvaluationContext(
     CrashIncident? SelectedIncident,
     IReadOnlyList<BackgroundEventRecord> SystemBackgroundEvents,
     IReadOnlyList<SourceCoverage> Coverage,
-    EnvironmentSnapshot? Environment);
+    EnvironmentSnapshot? Environment,
+    UserConfirmedEngineLog? StandaloneLog = null,
+    ReportSubjectKind SubjectKind = ReportSubjectKind.InsufficientEvidence,
+    string? WindowsScanStateLabel = null)
+{
+    public UserConfirmedEngineLog? ActiveLog => SelectedIncident?.ConfirmedEngineLog ?? StandaloneLog;
+}
 
 public interface IDiagnosisRule
 {
