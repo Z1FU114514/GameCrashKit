@@ -1,0 +1,18 @@
+<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+  <System>
+    <Provider Name="nvlddmkm" />
+    <EventID Qualifiers="0">153</EventID>
+    <Version>0</Version>
+    <Level>2</Level>
+    <Task>0</Task>
+    <Keywords>0x80000000000000</Keywords>
+    <TimeCreated SystemTime="2026-11-26T08:15:28.0000000Z" />
+    <EventRecordID>5125</EventRecordID>
+    <Channel>System</Channel>
+    <Computer>SYNTHETIC-PC</Computer>
+  </System>
+  <EventData>
+    <Data>\Device\Video3</Data>
+    <Data>Restarting TDR occurred on GPUID:100</Data>
+  </EventData>
+</Event>

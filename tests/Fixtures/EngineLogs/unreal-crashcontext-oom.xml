@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FGenericCrashContext>
+  <RuntimeProperties>
+    <CrashVersion>3</CrashVersion>
+    <ExecutionGuid>44444444555566667777888899990000</ExecutionGuid>
+    <CrashType>GPUCrash</CrashType>
+    <ErrorMessage>Out of video memory trying to allocate a rendering resource. Make sure your video card has the minimum required memory.</ErrorMessage>
+    <RHI>D3D12</RHI>
+    <EngineVersion>5.4.4-0+++UE5+Release-5.4</EngineVersion>
+  </RuntimeProperties>
+</FGenericCrashContext>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE Event [
+  <!ENTITY xxe SYSTEM "file:///C:/Windows/win.ini">
+]>
+<Event>
+  <System>
+    <Provider Name="Application Error" />
+    <EventID>1000</EventID>
+  </System>
+  <EventData>
+    <Data Name="AppName">&xxe;</Data>
+  </EventData>
+</Event>

@@ -1,0 +1,29 @@
+<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+  <System>
+    <Provider Name="Application Error" />
+    <EventID Qualifiers="0">1000</EventID>
+    <Version>0</Version>
+    <Level>2</Level>
+    <Task>100</Task>
+    <Keywords>0x80000000000000</Keywords>
+    <TimeCreated SystemTime="2026-11-26T07:10:00.0000000Z" />
+    <EventRecordID>8801</EventRecordID>
+    <Channel>Application</Channel>
+    <Computer>SYNTHETIC-WIN10</Computer>
+  </System>
+  <EventData>
+    <Data>LegacyGame.exe</Data>
+    <Data>1.0.0.1</Data>
+    <Data>5f112233</Data>
+    <Data>d3d11.dll</Data>
+    <Data>10.0.19041.4355</Data>
+    <Data>66112233</Data>
+    <Data>c0000005</Data>
+    <Data>0000000000089abc</Data>
+    <Data>0x1f40</Data>
+    <Data>0x01db400112233445</Data>
+    <Data>C:\Games\LegacyGame\LegacyGame.exe</Data>
+    <Data>C:\Windows\System32\d3d11.dll</Data>
+    <Data>aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee</Data>
+  </EventData>
+</Event>

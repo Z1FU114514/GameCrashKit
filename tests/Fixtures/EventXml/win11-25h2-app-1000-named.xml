@@ -1,0 +1,35 @@
+<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+  <System>
+    <Provider Name="Application Error" Guid="{a0e9b465-b939-57d7-b27d-95d8e925ff57}" />
+    <EventID>1000</EventID>
+    <Version>0</Version>
+    <Level>2</Level>
+    <Task>100</Task>
+    <Opcode>0</Opcode>
+    <Keywords>0x8000000000000000</Keywords>
+    <TimeCreated SystemTime="2026-11-26T08:15:30.1234567Z" />
+    <EventRecordID>10421</EventRecordID>
+    <Correlation />
+    <Execution ProcessID="9824" ThreadID="1024" />
+    <Channel>Application</Channel>
+    <Computer>SYNTHETIC-PC</Computer>
+    <Security />
+  </System>
+  <EventData>
+    <Data Name="AppName">SampleGame.exe</Data>
+    <Data Name="AppVersion">1.2.3.4</Data>
+    <Data Name="AppTimeStamp">6789abcd</Data>
+    <Data Name="ModuleName">SampleGame.exe</Data>
+    <Data Name="ModuleVersion">1.2.3.4</Data>
+    <Data Name="ModuleTimeStamp">6789abcd</Data>
+    <Data Name="ExceptionCode">c0000005</Data>
+    <Data Name="FaultingOffset">000000000012ab34</Data>
+    <Data Name="ProcessId">0x2a10</Data>
+    <Data Name="ProcessCreationTime">0x1db401234567890</Data>
+    <Data Name="AppPath">D:\Games\SteamLibrary\steamapps\common\SampleGame\SampleGame.exe</Data>
+    <Data Name="ModulePath">D:\Games\SteamLibrary\steamapps\common\SampleGame\SampleGame.exe</Data>
+    <Data Name="IntegratorReportId">11111111-2222-3333-4444-555555555555</Data>
+    <Data Name="PackageFullName"></Data>
+    <Data Name="PackageRelativeAppId"></Data>
+  </EventData>
+</Event>

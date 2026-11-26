@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>GameCrashKit.Windows</RootNamespace>
+    <AssemblyName>GameCrashKit.Windows</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GameCrashKit.Core\GameCrashKit.Core.csproj" />
+    <PackageReference Include="System.Diagnostics.EventLog" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,37 @@
+<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+  <System>
+    <Provider Name="Windows Error Reporting" Guid="{0ead09bd-2157-539a-8d6d-c87f95b64d70}" />
+    <EventID>1001</EventID>
+    <Version>0</Version>
+    <Level>4</Level>
+    <TimeCreated SystemTime="2026-11-26T08:16:00.0000000Z" />
+    <EventRecordID>10423</EventRecordID>
+    <Channel>Application</Channel>
+    <Computer>SYNTHETIC-PC</Computer>
+  </System>
+  <EventData>
+    <Data Name="Bucket"></Data>
+    <Data Name="BucketType">0</Data>
+    <Data Name="EventName">LiveKernelEvent</Data>
+    <Data Name="Response">不可用</Data>
+    <Data Name="CabId">0</Data>
+    <Data Name="P1">141</Data>
+    <Data Name="P2">aaaaaaaaaaaaaaaa</Data>
+    <Data Name="P3">aaaaaaaaaaaaaaaa</Data>
+    <Data Name="P4">aaaaaaaaaaaaaaaa</Data>
+    <Data Name="P5">aaaaaaaaaaaaaaaa</Data>
+    <Data Name="P6">10_0_26200</Data>
+    <Data Name="P7">0_0</Data>
+    <Data Name="P8">256_1</Data>
+    <Data Name="P9"></Data>
+    <Data Name="P10"></Data>
+    <Data Name="AttachedFiles"></Data>
+    <Data Name="StorePath"></Data>
+    <Data Name="AnalysisSymbol"></Data>
+    <Data Name="Rechecking">0</Data>
+    <Data Name="ReportId">33333333-4444-5555-6666-777777777777</Data>
+    <Data Name="ReportStatus">2049</Data>
+    <Data Name="HashedBucket"></Data>
+    <Data Name="CabGuid">0</Data>
+  </EventData>
+</Event>

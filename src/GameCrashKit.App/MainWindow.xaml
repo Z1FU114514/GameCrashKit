@@ -1,0 +1,21 @@
+<Window x:Class="GameCrashKit.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="GameCrash Kit (v0.1-alpha M0 Skeleton)"
+        Width="960"
+        Height="640"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="24">
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+            <TextBlock Text="GameCrash Kit（游戏闪退急诊室）"
+                       FontSize="24"
+                       FontWeight="SemiBold"
+                       HorizontalAlignment="Center" />
+            <TextBlock Text="v0.1-alpha M0 工程骨架 · 纯本地只读 · 零提权 (asInvoker)"
+                       Margin="0,8,0,0"
+                       FontSize="14"
+                       Foreground="#555555"
+                       HorizontalAlignment="Center" />
+        </StackPanel>
+    </Grid>
+</Window>
