@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Input;
+using GameCrashKit.App.Themes;
 using GameCrashKit.App.ViewModels;
 using Microsoft.Win32;
 
@@ -12,6 +13,7 @@ public partial class SharePreviewWindow : Window
     public SharePreviewWindow(SharePreviewViewModel viewModel)
     {
         InitializeComponent();
+        DarkTitleBarHelper.Apply(this);
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         DataContext = _viewModel;
 

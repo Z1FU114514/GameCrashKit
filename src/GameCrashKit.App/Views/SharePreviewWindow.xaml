@@ -19,39 +19,46 @@
         <!-- Hero Privacy Header -->
         <Border Grid.Row="0"
                 Background="{StaticResource HeroHeaderBrush}"
+                BorderBrush="{StaticResource BorderBrushLight}"
+                BorderThickness="1"
                 CornerRadius="10"
-                Padding="16,12"
                 Margin="0,0,0,8"
                 Effect="{StaticResource CardShadowEffect}">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+            <StackPanel>
+                <Border Height="2"
+                        CornerRadius="10,10,0,0"
+                        Background="{StaticResource BrandGradientBrush}" />
 
-                <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                    <TextBlock Text="脱敏急诊单预览与导出（所见即所得）"
-                               FontSize="16"
-                               FontWeight="Bold"
-                               Foreground="#FFFFFF" />
-                    <TextBlock Text="PNG 与 Markdown 共用同一份不可变白名单投影，导出文件与预览完全一致"
-                               FontSize="11.5"
-                               Foreground="#94A3B8"
-                               Margin="0,3,0,0" />
-                </StackPanel>
+                <Grid Margin="16,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
 
-                <Border Grid.Column="1"
-                        Background="{StaticResource SuccessBgBrush}"
-                        CornerRadius="5"
-                        Padding="10,4"
-                        Margin="12,0,0,0"
-                        VerticalAlignment="Center">
-                    <TextBlock Text="{Binding PrivacyStatusText}"
-                               FontSize="11.5"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource SuccessTextBrush}" />
-                </Border>
-            </Grid>
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                        <TextBlock Text="脱敏急诊单预览与导出（所见即所得）"
+                                   FontSize="16"
+                                   FontWeight="Bold"
+                                   Foreground="{StaticResource TextPrimaryBrush}" />
+                        <TextBlock Text="PNG 与 Markdown 共用同一份不可变白名单投影，导出文件与预览完全一致"
+                                   FontSize="11.5"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Margin="0,3,0,0" />
+                    </StackPanel>
+
+                    <Border Grid.Column="1"
+                            Background="{StaticResource SuccessBgBrush}"
+                            CornerRadius="5"
+                            Padding="10,4"
+                            Margin="12,0,0,0"
+                            VerticalAlignment="Center">
+                        <TextBlock Text="{Binding PrivacyStatusText}"
+                                   FontSize="11.5"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource SuccessTextBrush}" />
+                    </Border>
+                </Grid>
+            </StackPanel>
         </Border>
 
         <!-- Responsive Privacy Checkboxes -->
@@ -76,7 +83,7 @@
         <!-- WYSIWYG Preview Tabs -->
         <TabControl Grid.Row="2" Style="{StaticResource ModernTabControlStyle}">
             <TabItem Header="PNG 急诊单长图预览（所见即所得）" Style="{StaticResource ModernTabItemStyle}">
-                <Border Background="#FFFFFF"
+                <Border Background="{StaticResource CardBackgroundBrush}"
                         BorderBrush="{StaticResource BorderBrushLight}"
                         BorderThickness="1"
                         CornerRadius="0,8,8,8"
@@ -95,7 +102,8 @@
                             <TextBlock Grid.Column="0"
                                        Text="{Binding PngDimensionsText}"
                                        FontSize="12"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       Foreground="{StaticResource BrandCyanBrush}"
+                                       FontWeight="SemiBold"
                                        VerticalAlignment="Center" />
                             <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="10,0,0,0">
                                 <Button Content="重试渲染"
@@ -111,9 +119,9 @@
                         </Grid>
 
                         <Border Grid.Row="1"
-                                BorderBrush="{StaticResource SubtleSurfaceBorderBrush}"
+                                BorderBrush="{StaticResource BorderBrushLight}"
                                 BorderThickness="1"
-                                Background="#E2E8F0"
+                                Background="{StaticResource AppBackgroundBrush}"
                                 CornerRadius="8">
                             <Grid>
                                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="14">
@@ -124,6 +132,8 @@
                                 </ScrollViewer>
 
                                 <Border Background="{StaticResource WarningBgBrush}"
+                                        BorderBrush="{StaticResource WarningBorderBrush}"
+                                        BorderThickness="1"
                                         Padding="16"
                                         HorizontalAlignment="Center"
                                         VerticalAlignment="Center"
@@ -141,7 +151,7 @@
             </TabItem>
 
             <TabItem Header="脱敏 Markdown 预览（与剪贴板逐字一致）" Style="{StaticResource ModernTabItemStyle}">
-                <Border Background="#FFFFFF"
+                <Border Background="{StaticResource CardBackgroundBrush}"
                         BorderBrush="{StaticResource BorderBrushLight}"
                         BorderThickness="1"
                         CornerRadius="0,8,8,8"
@@ -178,11 +188,12 @@
                                  IsReadOnly="True"
                                  FontFamily="Consolas, Microsoft YaHei UI"
                                  FontSize="12.5"
+                                 Foreground="{StaticResource TextPrimaryBrush}"
+                                 Background="{StaticResource InteractiveSurfaceBrush}"
+                                 BorderBrush="{StaticResource BorderBrushLight}"
                                  TextWrapping="Wrap"
                                  VerticalScrollBarVisibility="Auto"
                                  AcceptsReturn="True"
-                                 BorderBrush="{StaticResource SubtleSurfaceBorderBrush}"
-                                 Background="{StaticResource SubtleSurfaceBrush}"
                                  Padding="12" />
                     </Grid>
                 </Border>
@@ -197,7 +208,7 @@
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0"
                        Text="{Binding ActionFeedbackText}"
-                       Foreground="{StaticResource AccentBrush}"
+                       Foreground="{StaticResource BrandCyanBrush}"
                        FontWeight="SemiBold"
                        VerticalAlignment="Center"
                        TextTrimming="CharacterEllipsis" />

@@ -135,7 +135,7 @@ public sealed class MainWindowLayoutTests
         {
             Application.Current.Resources.MergedDictionaries.Add(new ResourceDictionary
             {
-                Source = new Uri("pack://application:,,,/GameCrashKit.App;component/Themes/FluentLightTheme.xaml")
+                Source = new Uri("pack://application:,,,/GameCrashKit.App;component/Themes/CyberDarkTheme.xaml")
             });
             Application.Current.Resources["BoolToVis"] = new BooleanToVisibilityConverter();
         }

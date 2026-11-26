@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Input;
+using GameCrashKit.App.Themes;
 using GameCrashKit.App.ViewModels;
 using GameCrashKit.App.Views;
 using Microsoft.Win32;
@@ -13,6 +14,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        DarkTitleBarHelper.Apply(this);
         _viewModel = new MainViewModel();
         DataContext = _viewModel;
 

@@ -21,98 +21,107 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- 1. Hero Header Bar (Brand Left + Primary Actions Right, Responsive WrapPanel) -->
+        <!-- 1. Hero Header Bar (暗影石板 + 电光靛蓝->赛博青 2px 顶光条) -->
         <Border Grid.Row="0"
                 Background="{StaticResource HeroHeaderBrush}"
+                BorderBrush="{StaticResource BorderBrushLight}"
+                BorderThickness="1"
                 CornerRadius="10"
-                Padding="16,12"
                 Margin="0,0,0,8"
                 Effect="{StaticResource CardShadowEffect}">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+            <StackPanel>
+                <Border Height="2"
+                        CornerRadius="10,10,0,0"
+                        Background="{StaticResource BrandGradientBrush}" />
 
-                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <!-- Shield + Pulse Vector Badge -->
-                    <Border Background="#1E3A5F"
-                            BorderBrush="#38BDF8"
-                            BorderThickness="1"
-                            CornerRadius="8"
-                            Width="36"
-                            Height="36"
-                            Margin="0,0,12,0"
-                            VerticalAlignment="Center">
-                        <Path Data="M 10,2 L 18,5 V 11 C 18,15.5 14.5,18.5 10,20 C 5.5,18.5 2,15.5 2,11 V 5 Z M 5.5,11 H 8 L 9.5,8 L 11,13.5 L 12.5,11 H 14.5"
-                              Stroke="{StaticResource BrandCyanBrush}"
-                              StrokeThickness="1.7"
-                              StrokeLineJoin="Round"
-                              StrokeStartLineCap="Round"
-                              StrokeEndLineCap="Round"
-                              HorizontalAlignment="Center"
-                              VerticalAlignment="Center" />
-                    </Border>
+                <Grid Margin="16,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
 
-                    <StackPanel VerticalAlignment="Center">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="GameCrash Kit"
-                                       FontSize="17"
-                                       FontWeight="Bold"
-                                       Foreground="#FFFFFF"
-                                       VerticalAlignment="Center" />
-                            <Border Background="#164E63"
-                                    CornerRadius="4"
-                                    Padding="7,2"
-                                    Margin="9,0,0,0"
-                                    VerticalAlignment="Center">
-                                <TextBlock Text="游戏闪退急诊室"
-                                           FontSize="11.5"
-                                           FontWeight="SemiBold"
-                                           Foreground="{StaticResource BrandCyanBrush}" />
-                            </Border>
-                            <Border Background="#1E293B"
-                                    BorderBrush="#475569"
-                                    BorderThickness="1"
-                                    CornerRadius="4"
-                                    Padding="6,1"
-                                    Margin="6,0,0,0"
-                                    VerticalAlignment="Center">
-                                <TextBlock Text="v0.1-alpha"
-                                           FontSize="11"
-                                           Foreground="#CBD5E1" />
-                            </Border>
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <!-- Shield + Pulse Vector Badge -->
+                        <Border Background="#161D33"
+                                BorderBrush="{StaticResource AccentBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Width="38"
+                                Height="38"
+                                Margin="0,0,12,0"
+                                VerticalAlignment="Center">
+                            <Path Data="M 10,2 L 18,5 V 11 C 18,15.5 14.5,18.5 10,20 C 5.5,18.5 2,15.5 2,11 V 5 Z M 5.5,11 H 8 L 9.5,8 L 11,13.5 L 12.5,11 H 14.5"
+                                  Stroke="{StaticResource BrandCyanBrush}"
+                                  StrokeThickness="1.7"
+                                  StrokeLineJoin="Round"
+                                  StrokeStartLineCap="Round"
+                                  StrokeEndLineCap="Round"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center" />
+                        </Border>
+
+                        <StackPanel VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="GameCrash Kit"
+                                           FontSize="17"
+                                           FontWeight="Bold"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           VerticalAlignment="Center" />
+                                <Border Background="{StaticResource InfoBgBrush}"
+                                        BorderBrush="#1E3A5F"
+                                        BorderThickness="1"
+                                        CornerRadius="4"
+                                        Padding="7,2"
+                                        Margin="9,0,0,0"
+                                        VerticalAlignment="Center">
+                                    <TextBlock Text="游戏闪退急诊室"
+                                               FontSize="11.5"
+                                               FontWeight="SemiBold"
+                                               Foreground="{StaticResource BrandCyanBrush}" />
+                                </Border>
+                                <Border Background="{StaticResource InteractiveSurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrushLight}"
+                                        BorderThickness="1"
+                                        CornerRadius="4"
+                                        Padding="6,1"
+                                        Margin="6,0,0,0"
+                                        VerticalAlignment="Center">
+                                    <TextBlock Text="v0.1-alpha"
+                                               FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}" />
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Text="纯本地只读事后取证 · 零提权 · 不接触游戏进程"
+                                       FontSize="11.5"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       Margin="0,3,0,0" />
                         </StackPanel>
-                        <TextBlock Text="纯本地只读事后取证 · 零提权 · 不接触游戏进程"
-                                   FontSize="11.5"
-                                   Foreground="#94A3B8"
-                                   Margin="0,3,0,0" />
                     </StackPanel>
-                </StackPanel>
 
-                <WrapPanel Grid.Column="1"
-                           Orientation="Horizontal"
-                           VerticalAlignment="Center"
-                           HorizontalAlignment="Right"
-                           Margin="12,0,0,0">
-                    <Button Content="开始只读诊断 (F5)"
-                            Style="{StaticResource HeaderPrimaryButtonStyle}"
-                            Command="{Binding StartScanCommand}"
-                            Margin="0,2,8,2" />
-                    <Button Content="取消 (Esc)"
-                            Style="{StaticResource HeaderGhostButtonStyle}"
-                            Command="{Binding CancelScanCommand}"
-                            Margin="0,2,8,2" />
-                    <Button Content="预览与导出急诊单 (Ctrl+E)"
-                            Style="{StaticResource HeaderGhostButtonStyle}"
-                            IsEnabled="{Binding HasReport}"
-                            Click="OpenSharePreviewButton_Click"
-                            Margin="0,2,0,2" />
-                </WrapPanel>
-            </Grid>
+                    <WrapPanel Grid.Column="1"
+                               Orientation="Horizontal"
+                               VerticalAlignment="Center"
+                               HorizontalAlignment="Right"
+                               Margin="12,0,0,0">
+                        <Button Content="开始只读诊断 (F5)"
+                                Style="{StaticResource HeaderPrimaryButtonStyle}"
+                                Command="{Binding StartScanCommand}"
+                                Margin="0,2,8,2" />
+                        <Button Content="取消 (Esc)"
+                                Style="{StaticResource HeaderGhostButtonStyle}"
+                                Command="{Binding CancelScanCommand}"
+                                Margin="0,2,8,2" />
+                        <Button Content="预览与导出急诊单 (Ctrl+E)"
+                                Style="{StaticResource HeaderGhostButtonStyle}"
+                                IsEnabled="{Binding HasReport}"
+                                Click="OpenSharePreviewButton_Click"
+                                Margin="0,2,0,2" />
+                    </WrapPanel>
+                </Grid>
+            </StackPanel>
         </Border>
 
-        <!-- 2. Responsive Sub-Toolbar (Automatically Wraps on Narrow Windows) -->
+        <!-- 2. Responsive Sub-Toolbar -->
         <Border Grid.Row="1"
                 Style="{StaticResource CardBorderStyle}"
                 Padding="14,9"
@@ -153,8 +162,8 @@
                 </WrapPanel>
 
                 <Border Grid.Column="1"
-                        Background="{StaticResource SubtleSurfaceBrush}"
-                        BorderBrush="{StaticResource SubtleSurfaceBorderBrush}"
+                        Background="{StaticResource InteractiveSurfaceBrush}"
+                        BorderBrush="{StaticResource BorderBrushLight}"
                         BorderThickness="1"
                         CornerRadius="5"
                         Padding="9,4"
@@ -162,7 +171,7 @@
                         VerticalAlignment="Center">
                     <TextBlock Text="支持直接拖入单个 .log / .txt / .xml"
                                FontSize="11.5"
-                               Foreground="{StaticResource TextMutedBrush}" />
+                               Foreground="{StaticResource TextSecondaryBrush}" />
                 </Border>
             </Grid>
         </Border>
@@ -183,11 +192,12 @@
                             Width="8"
                             Height="8"
                             CornerRadius="4"
-                            Background="{StaticResource AccentBrush}"
+                            Background="{StaticResource BrandCyanBrush}"
                             VerticalAlignment="Center"
                             Margin="0,0,9,0" />
                     <TextBlock Grid.Column="1"
                                Text="{Binding StatusHeadline}"
+                               Foreground="{StaticResource TextPrimaryBrush}"
                                FontWeight="Bold"
                                FontSize="13.5"
                                VerticalAlignment="Center" />
@@ -195,9 +205,9 @@
 
                 <ProgressBar IsIndeterminate="True"
                              Height="3"
-                             Margin="0,7,0,3"
-                             Foreground="{StaticResource AccentBrush}"
-                             Background="{StaticResource NeutralBadgeBgBrush}"
+                             Margin="0,8,0,3"
+                             Foreground="{StaticResource BrandCyanBrush}"
+                             Background="{StaticResource InteractiveSurfaceBrush}"
                              BorderThickness="0"
                              Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}" />
 
@@ -207,7 +217,7 @@
                            Margin="17,4,0,0" />
 
                 <Border Background="{StaticResource WarningBgBrush}"
-                        BorderBrush="#FDE68A"
+                        BorderBrush="{StaticResource WarningBorderBrush}"
                         BorderThickness="1"
                         CornerRadius="6"
                         Padding="10,6"
@@ -250,11 +260,13 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                <TextBlock Text="近期故障候选" FontWeight="Bold" FontSize="14" />
+                                <TextBlock Text="近期故障候选" FontWeight="Bold" FontSize="14" Foreground="{StaticResource TextPrimaryBrush}" />
                                 <TextBlock Text="疑似游戏目录自动置顶" FontSize="11.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0" />
                             </StackPanel>
                             <Border Grid.Column="1"
-                                    Background="{StaticResource NeutralBadgeBgBrush}"
+                                    Background="{StaticResource InteractiveSurfaceBrush}"
+                                    BorderBrush="{StaticResource BorderBrushLight}"
+                                    BorderThickness="1"
                                     CornerRadius="5"
                                     Padding="7,3"
                                     Margin="8,0,0,0"
@@ -262,7 +274,7 @@
                                     Visibility="{Binding HasFilteredNoiseHint, Converter={StaticResource BoolToVis}}">
                                 <TextBlock Text="{Binding FilteredNoiseHint}"
                                            FontSize="11"
-                                           Foreground="{StaticResource NeutralBadgeTextBrush}" />
+                                           Foreground="{StaticResource TextSecondaryBrush}" />
                             </Border>
                         </Grid>
 
@@ -285,6 +297,7 @@
                                             </Grid.ColumnDefinitions>
                                             <TextBlock Grid.Column="0"
                                                        Text="{Binding DisplayTitle}"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
                                                        FontWeight="Bold"
                                                        FontSize="13.5"
                                                        TextTrimming="CharacterEllipsis"
@@ -298,12 +311,12 @@
                                         </Grid>
 
                                         <WrapPanel Margin="0,6,0,0">
-                                            <Border Background="{StaticResource NeutralBadgeBgBrush}" CornerRadius="4" Padding="6,2" Margin="0,0,6,2">
-                                                <TextBlock Text="{Binding AnchorBadgeText}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource NeutralBadgeTextBrush}" />
+                                            <Border Background="#20283D" CornerRadius="4" Padding="6,2" Margin="0,0,6,2">
+                                                <TextBlock Text="{Binding AnchorBadgeText}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" />
                                             </Border>
                                             <Border Background="{StaticResource InfoBgBrush}" CornerRadius="4" Padding="6,2" Margin="0,0,6,2"
                                                     Visibility="{Binding IsLikelyGame, Converter={StaticResource BoolToVis}}">
-                                                <TextBlock Text="常见游戏目录" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource InfoTextBrush}" />
+                                                <TextBlock Text="常见游戏目录" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource BrandCyanBrush}" />
                                             </Border>
                                             <Border Background="{StaticResource WarningBgBrush}" CornerRadius="4" Padding="6,2" Margin="0,0,0,2"
                                                     Visibility="{Binding HasMultipleOccurrences, Converter={StaticResource BoolToVis}}">
@@ -323,8 +336,8 @@
 
                         <!-- Empty Candidate Placeholder -->
                         <Border Grid.Row="1"
-                                Background="{StaticResource SubtleSurfaceBrush}"
-                                BorderBrush="{StaticResource SubtleSurfaceBorderBrush}"
+                                Background="{StaticResource InteractiveSurfaceBrush}"
+                                BorderBrush="{StaticResource BorderBrushLight}"
                                 BorderThickness="1"
                                 CornerRadius="8"
                                 Padding="16"
@@ -334,11 +347,11 @@
                                 <TextBlock Text="暂无待选故障事件"
                                            FontWeight="SemiBold"
                                            FontSize="13.5"
-                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
                                            HorizontalAlignment="Center" />
                                 <TextBlock Text="点击上方「开始只读诊断 (F5)」采集近期闪退或卡死事件；若未命中可切换 24 小时 / 7 天时间窗。"
                                            FontSize="12"
-                                           Foreground="{StaticResource TextMutedBrush}"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
                                            TextWrapping="Wrap"
                                            TextAlignment="Center"
                                            Margin="0,6,0,0" />
@@ -356,7 +369,7 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                <TextBlock Text="游戏引擎日志" FontWeight="Bold" FontSize="13.5" />
+                                <TextBlock Text="游戏引擎日志" FontWeight="Bold" FontSize="13.5" Foreground="{StaticResource TextPrimaryBrush}" />
                                 <TextBlock Text="需由您手动确认归属当前事故" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,1,0,0" />
                             </StackPanel>
                             <Button Grid.Column="1"
@@ -369,21 +382,21 @@
                                     Margin="8,0,0,0" />
                         </Grid>
 
-                        <Border Background="{StaticResource SubtleSurfaceBrush}"
-                                BorderBrush="{StaticResource SubtleSurfaceBorderBrush}"
+                        <Border Background="{StaticResource InteractiveSurfaceBrush}"
+                                BorderBrush="{StaticResource BorderBrushLight}"
                                 BorderThickness="1"
                                 CornerRadius="6"
                                 Padding="9,6">
                             <TextBlock Text="{Binding AttachedEngineLogSummary}"
                                        FontSize="12"
-                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
                                        TextWrapping="Wrap" />
                         </Border>
 
                         <TextBlock Text="{Binding EngineLogFeedbackMessage}"
                                    FontSize="11.5"
                                    FontWeight="SemiBold"
-                                   Foreground="{StaticResource AccentBrush}"
+                                   Foreground="{StaticResource BrandCyanBrush}"
                                    TextWrapping="Wrap"
                                    Margin="0,6,0,0"
                                    Visibility="{Binding HasEngineLogFeedback, Converter={StaticResource BoolToVis}}" />
@@ -408,7 +421,7 @@
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
                                             <StackPanel Grid.Column="0" Margin="0,0,8,0" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding DisplayName}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding DisplayName}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" />
                                                 <TextBlock Text="{Binding SanitizedLocationHint}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" TextTrimming="CharacterEllipsis" />
                                             </StackPanel>
                                             <Button Grid.Column="1"
@@ -449,11 +462,14 @@
                                     <TextBlock Text="诊断结论与下一步建议"
                                                FontSize="15"
                                                FontWeight="Bold"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
                                                VerticalAlignment="Center" />
                                 </StackPanel>
 
                                 <Border Grid.Column="1"
-                                        Background="{StaticResource NeutralBadgeBgBrush}"
+                                        Background="{StaticResource InteractiveSurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrushLight}"
+                                        BorderThickness="1"
                                         CornerRadius="5"
                                         Padding="9,4"
                                         Margin="12,0,0,0"
@@ -466,14 +482,14 @@
                             </Grid>
 
                             <!-- Idle Onboarding Guide -->
-                            <Border Background="{StaticResource SubtleSurfaceBrush}"
-                                    BorderBrush="{StaticResource SubtleSurfaceBorderBrush}"
+                            <Border Background="{StaticResource InteractiveSurfaceBrush}"
+                                    BorderBrush="{StaticResource BorderBrushLight}"
                                     BorderThickness="1"
                                     CornerRadius="8"
                                     Padding="16"
                                     Visibility="{Binding ShowIdleWelcome, Converter={StaticResource BoolToVis}}">
                                 <StackPanel>
-                                    <TextBlock Text="闪退发生后 30 秒急诊流程" FontSize="14" FontWeight="Bold" Margin="0,0,0,10" />
+                                    <TextBlock Text="闪退发生后 30 秒急诊流程" FontSize="14" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,10" />
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
@@ -483,24 +499,24 @@
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
 
-                                        <Border Grid.Column="0" Background="#FFFFFF" BorderBrush="{StaticResource BorderBrushLight}" BorderThickness="1" CornerRadius="7" Padding="12">
+                                        <Border Grid.Column="0" Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource BorderBrushLight}" BorderThickness="1" CornerRadius="7" Padding="12">
                                             <StackPanel>
-                                                <TextBlock Text="① 一键只读取证" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" Margin="0,0,0,4" />
-                                                <TextBlock Text="点击左上「开始只读诊断 (F5)」，自动提取事件 XML、系统背景与 7 项环境基线。" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                                                <TextBlock Text="① 一键只读取证" FontWeight="Bold" Foreground="{StaticResource BrandCyanBrush}" Margin="0,0,0,5" />
+                                                <TextBlock Text="点击左上「开始只读诊断 (F5)」，自动提取事件 XML、系统背景与 7 项环境基线。" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" LineHeight="18" />
                                             </StackPanel>
                                         </Border>
 
-                                        <Border Grid.Column="2" Background="#FFFFFF" BorderBrush="{StaticResource BorderBrushLight}" BorderThickness="1" CornerRadius="7" Padding="12">
+                                        <Border Grid.Column="2" Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource BorderBrushLight}" BorderThickness="1" CornerRadius="7" Padding="12">
                                             <StackPanel>
-                                                <TextBlock Text="② 确认事故与日志" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" Margin="0,0,0,4" />
-                                                <TextBlock Text="核对左侧故障程序与时间点；如为 Unity/Unreal 游戏可确认关联日志提升线索精度。" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                                                <TextBlock Text="② 确认事故与日志" FontWeight="Bold" Foreground="{StaticResource BrandCyanBrush}" Margin="0,0,0,5" />
+                                                <TextBlock Text="核对左侧故障程序与时间点；如为 Unity/Unreal 游戏可确认关联日志提升线索精度。" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" LineHeight="18" />
                                             </StackPanel>
                                         </Border>
 
-                                        <Border Grid.Column="4" Background="#FFFFFF" BorderBrush="{StaticResource BorderBrushLight}" BorderThickness="1" CornerRadius="7" Padding="12">
+                                        <Border Grid.Column="4" Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource BorderBrushLight}" BorderThickness="1" CornerRadius="7" Padding="12">
                                             <StackPanel>
-                                                <TextBlock Text="③ 导出脱敏急诊单" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" Margin="0,0,0,4" />
-                                                <TextBlock Text="预览并复制脱敏 Markdown 或保存 96-DPI 高清 PNG 长图，安全发往社区或 AI 排查。" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                                                <TextBlock Text="③ 导出脱敏急诊单" FontWeight="Bold" Foreground="{StaticResource BrandCyanBrush}" Margin="0,0,0,5" />
+                                                <TextBlock Text="预览并复制脱敏 Markdown 或保存 96-DPI 高清 PNG 长图，安全发往社区或 AI 排查。" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" LineHeight="18" />
                                             </StackPanel>
                                         </Border>
                                     </Grid>
@@ -516,7 +532,7 @@
                                                 BorderThickness="1"
                                                 CornerRadius="8"
                                                 Margin="0,0,0,10"
-                                                Background="#FFFFFF">
+                                                Background="{StaticResource InteractiveSurfaceBrush}">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="4" />
@@ -549,11 +565,12 @@
                                                                    Text="{Binding Title}"
                                                                    FontSize="14.5"
                                                                    FontWeight="Bold"
+                                                                   Foreground="{StaticResource TextPrimaryBrush}"
                                                                    TextWrapping="Wrap"
                                                                    VerticalAlignment="Center" />
                                                         <Border Grid.Column="1"
-                                                                Background="{StaticResource SubtleSurfaceBrush}"
-                                                                BorderBrush="{StaticResource SubtleSurfaceBorderBrush}"
+                                                                Background="{StaticResource CardBackgroundBrush}"
+                                                                BorderBrush="{StaticResource BorderBrushLight}"
                                                                 BorderThickness="1"
                                                                 CornerRadius="4"
                                                                 Padding="6,2"
@@ -561,18 +578,18 @@
                                                                 VerticalAlignment="Center">
                                                             <TextBlock Text="{Binding RuleTag}"
                                                                        FontSize="11"
-                                                                       Foreground="{StaticResource TextMutedBrush}" />
+                                                                       Foreground="{StaticResource TextSecondaryBrush}" />
                                                         </Border>
                                                     </Grid>
 
                                                     <StackPanel Orientation="Horizontal" Margin="0,8,0,8">
-                                                        <Border Background="{StaticResource NeutralBadgeBgBrush}" CornerRadius="5" Padding="8,3" Margin="0,0,8,0">
-                                                            <TextBlock Text="{Binding AttributionText}" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource NeutralBadgeTextBrush}" />
+                                                        <Border Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource BorderBrushLight}" BorderThickness="1" CornerRadius="5" Padding="8,3" Margin="0,0,8,0">
+                                                            <TextBlock Text="{Binding AttributionText}" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" />
                                                         </Border>
                                                         <Border CornerRadius="5" Padding="8,3">
                                                             <Border.Style>
                                                                 <Style TargetType="Border">
-                                                                    <Setter Property="Background" Value="{StaticResource NeutralBadgeBgBrush}" />
+                                                                    <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}" />
                                                                     <Style.Triggers>
                                                                         <DataTrigger Binding="{Binding EvidenceStrength}" Value="{x:Static models:EvidenceStrength.ExplicitRecord}">
                                                                             <Setter Property="Background" Value="{StaticResource SuccessBgBrush}" />
@@ -583,11 +600,25 @@
                                                                     </Style.Triggers>
                                                                 </Style>
                                                             </Border.Style>
-                                                            <TextBlock Text="{Binding EvidenceStrengthText}" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
+                                                            <TextBlock FontSize="11.5" FontWeight="SemiBold" Text="{Binding EvidenceStrengthText}">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding EvidenceStrength}" Value="{x:Static models:EvidenceStrength.ExplicitRecord}">
+                                                                                <Setter Property="Foreground" Value="{StaticResource SuccessTextBrush}" />
+                                                                            </DataTrigger>
+                                                                            <DataTrigger Binding="{Binding EvidenceStrength}" Value="{x:Static models:EvidenceStrength.LimitedClue}">
+                                                                                <Setter Property="Foreground" Value="{StaticResource WarningTextBrush}" />
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
                                                         </Border>
                                                     </StackPanel>
 
-                                                    <TextBlock Text="{Binding Statement}" TextWrapping="Wrap" LineHeight="21" />
+                                                    <TextBlock Text="{Binding Statement}" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" LineHeight="21" />
 
                                                     <TextBlock Text="{Binding AmbiguityText}"
                                                                Foreground="{StaticResource WarningTextBrush}"
@@ -603,8 +634,8 @@
                                                             Padding="11,8"
                                                             Margin="0,10,0,0">
                                                         <StackPanel>
-                                                            <TextBlock Text="建议下一步：" FontSize="12" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" />
-                                                            <TextBlock Text="{Binding NextActionText}" FontSize="12.5" TextWrapping="Wrap" LineHeight="19" Margin="0,2,0,0" />
+                                                            <TextBlock Text="建议下一步：" FontSize="12" FontWeight="Bold" Foreground="{StaticResource BrandCyanBrush}" />
+                                                            <TextBlock Text="{Binding NextActionText}" FontSize="12.5" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" LineHeight="19" Margin="0,2,0,0" />
                                                         </StackPanel>
                                                     </Border>
 
@@ -637,12 +668,13 @@
                                     <TextBlock Text="技术证据定位、系统背景事件与数据源覆盖"
                                                FontSize="15"
                                                FontWeight="Bold"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
                                                VerticalAlignment="Center" />
                                 </StackPanel>
                             </Expander.Header>
 
                             <StackPanel Margin="0,6,0,0">
-                                <TextBlock Text="原始证据定位" FontWeight="Bold" Margin="0,0,0,6" />
+                                <TextBlock Text="原始证据定位" FontWeight="Bold" Foreground="{StaticResource BrandCyanBrush}" Margin="0,0,0,6" />
                                 <TextBlock Text="暂无证据记录（请先运行扫描）。"
                                            FontSize="12"
                                            Foreground="{StaticResource TextMutedBrush}"
@@ -652,9 +684,9 @@
                                 <ItemsControl ItemsSource="{Binding EvidenceItems}" Margin="0,0,0,12">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <Border BorderBrush="{StaticResource SubtleSurfaceBorderBrush}" BorderThickness="0,0,0,1" Padding="0,6">
+                                            <Border BorderBrush="{StaticResource BorderBrushLight}" BorderThickness="0,0,0,1" Padding="0,6">
                                                 <StackPanel>
-                                                    <TextBlock FontSize="12" FontWeight="SemiBold">
+                                                    <TextBlock FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}">
                                                         <Run Text="{Binding SourceKindText, Mode=OneWay}" />
                                                         <Run Text=" · " />
                                                         <Run Text="{Binding TimestampText, Mode=OneWay}" />
@@ -667,11 +699,11 @@
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
 
-                                <TextBlock Text="系统背景时间线（仅系统背景，无具体进程归属，非崩溃根因）" FontWeight="Bold" Margin="0,0,0,6" />
+                                <TextBlock Text="系统背景时间线（仅系统背景，无具体进程归属，非崩溃根因）" FontWeight="Bold" Foreground="{StaticResource BrandCyanBrush}" Margin="0,0,0,6" />
                                 <ItemsControl ItemsSource="{Binding SystemBackgroundItems}" Margin="0,0,0,12">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <TextBlock FontSize="12" TextWrapping="Wrap" Margin="0,2">
+                                            <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,2">
                                                 <Run Text="[" />
                                                 <Run Text="{Binding TimestampText, Mode=OneWay}" />
                                                 <Run Text="] (" />
@@ -683,12 +715,12 @@
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
 
-                                <TextBlock Text="数据源采集覆盖范围" FontWeight="Bold" Margin="0,0,0,6" />
+                                <TextBlock Text="数据源采集覆盖范围" FontWeight="Bold" Foreground="{StaticResource BrandCyanBrush}" Margin="0,0,0,6" />
                                 <ItemsControl ItemsSource="{Binding CoverageItems}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <TextBlock FontSize="12" TextWrapping="Wrap" Margin="0,2">
-                                                <Run Text="{Binding SourceName, Mode=OneWay}" FontWeight="SemiBold" />
+                                            <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,2">
+                                                <Run Text="{Binding SourceName, Mode=OneWay}" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
                                                 <Run Text=" — 状态: " />
                                                 <Run Text="{Binding StatusText, Mode=OneWay}" />
                                                 <Run Text=" | 读取条数: " />
@@ -719,11 +751,14 @@
                                     <TextBlock Text="本机环境事实快照"
                                                FontSize="15"
                                                FontWeight="Bold"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
                                                VerticalAlignment="Center" />
                                 </StackPanel>
 
                                 <Border Grid.Column="1"
-                                        Background="{StaticResource NeutralBadgeBgBrush}"
+                                        Background="{StaticResource InteractiveSurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrushLight}"
+                                        BorderThickness="1"
                                         CornerRadius="5"
                                         Padding="9,4"
                                         Margin="12,0,0,0"
@@ -735,15 +770,15 @@
                                 </Border>
                             </Grid>
 
-                            <Border Background="{StaticResource SubtleSurfaceBrush}"
-                                    BorderBrush="{StaticResource SubtleSurfaceBorderBrush}"
+                            <Border Background="{StaticResource InteractiveSurfaceBrush}"
+                                    BorderBrush="{StaticResource BorderBrushLight}"
                                     BorderThickness="1"
                                     CornerRadius="7"
                                     Padding="12"
                                     Visibility="{Binding ShowIdleWelcome, Converter={StaticResource BoolToVis}}">
                                 <TextBlock Text="扫描后将自动在此展示显卡发布日期、目标路径特征、OneDrive 文档同步、VC++ 运行库、页面文件、覆盖层快照与系统区域 7 项只读环境事实。"
                                            FontSize="12"
-                                           Foreground="{StaticResource TextMutedBrush}"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
                                            TextWrapping="Wrap" />
                             </Border>
 
@@ -751,7 +786,7 @@
                                           Visibility="{Binding HasEnvironmentFacts, Converter={StaticResource BoolToVis}}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border BorderBrush="{StaticResource SubtleSurfaceBorderBrush}" BorderThickness="0,0,0,1" Padding="0,8">
+                                        <Border BorderBrush="{StaticResource BorderBrushLight}" BorderThickness="0,0,0,1" Padding="0,8">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*" />
@@ -759,7 +794,7 @@
                                                 </Grid.ColumnDefinitions>
 
                                                 <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding Name}" FontSize="12.5" FontWeight="SemiBold" />
+                                                    <TextBlock Text="{Binding Name}" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
                                                     <TextBlock Text="{Binding ValueText}" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,2,0,0" />
                                                 </StackPanel>
 
@@ -770,7 +805,7 @@
                                                         Margin="10,0,0,0">
                                                     <Border.Style>
                                                         <Style TargetType="Border">
-                                                            <Setter Property="Background" Value="{StaticResource NeutralBadgeBgBrush}" />
+                                                            <Setter Property="Background" Value="{StaticResource InteractiveSurfaceBrush}" />
                                                             <Style.Triggers>
                                                                 <DataTrigger Binding="{Binding NoticeLevel}" Value="{x:Static models:EnvironmentNoticeLevel.Attention}">
                                                                     <Setter Property="Background" Value="{StaticResource WarningBgBrush}" />
@@ -778,7 +813,21 @@
                                                             </Style.Triggers>
                                                         </Style>
                                                     </Border.Style>
-                                                    <TextBlock Text="{Binding NoticeBadgeText}" FontSize="11.5" FontWeight="SemiBold" />
+                                                    <TextBlock Text="{Binding NoticeBadgeText}" FontSize="11.5" FontWeight="SemiBold">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Foreground" Value="{StaticResource BrandCyanBrush}" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding NoticeLevel}" Value="{x:Static models:EnvironmentNoticeLevel.Attention}">
+                                                                        <Setter Property="Foreground" Value="{StaticResource WarningTextBrush}" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding NoticeLevel}" Value="{x:Static models:EnvironmentNoticeLevel.Unavailable}">
+                                                                        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
                                                 </Border>
                                             </Grid>
                                         </Border>
