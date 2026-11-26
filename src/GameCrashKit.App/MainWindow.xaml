@@ -3,10 +3,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:models="clr-namespace:GameCrashKit.Core.Models;assembly=GameCrashKit.Core"
         Title="GameCrash Kit（游戏闪退急诊室）v0.1-alpha"
-        Width="1220"
-        Height="780"
-        MinWidth="960"
-        MinHeight="620"
+        Width="1240"
+        Height="800"
+        MinWidth="860"
+        MinHeight="600"
         AllowDrop="True"
         DragOver="Window_DragOver"
         Drop="Window_Drop"
@@ -16,88 +16,220 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- 1. Top Toolbar -->
-        <Border Grid.Row="0" Style="{StaticResource CardBorderStyle}" Padding="12,10" Margin="0,0,0,10">
-            <DockPanel LastChildFill="False">
-                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
-                    <TextBlock Text="GameCrash Kit" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
-                    <TextBlock Text="游戏闪退急诊室" FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" Margin="8,2,16,0" VerticalAlignment="Center" />
+        <!-- 1. Hero Header Bar (Brand Left + Primary Actions Right, Responsive WrapPanel) -->
+        <Border Grid.Row="0"
+                Background="{StaticResource HeroHeaderBrush}"
+                CornerRadius="10"
+                Padding="16,12"
+                Margin="0,0,0,8"
+                Effect="{StaticResource CardShadowEffect}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <!-- Shield + Pulse Vector Badge -->
+                    <Border Background="#1E3A5F"
+                            BorderBrush="#38BDF8"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Width="36"
+                            Height="36"
+                            Margin="0,0,12,0"
+                            VerticalAlignment="Center">
+                        <Path Data="M 10,2 L 18,5 V 11 C 18,15.5 14.5,18.5 10,20 C 5.5,18.5 2,15.5 2,11 V 5 Z M 5.5,11 H 8 L 9.5,8 L 11,13.5 L 12.5,11 H 14.5"
+                              Stroke="{StaticResource BrandCyanBrush}"
+                              StrokeThickness="1.7"
+                              StrokeLineJoin="Round"
+                              StrokeStartLineCap="Round"
+                              StrokeEndLineCap="Round"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center" />
+                    </Border>
+
+                    <StackPanel VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="GameCrash Kit"
+                                       FontSize="17"
+                                       FontWeight="Bold"
+                                       Foreground="#FFFFFF"
+                                       VerticalAlignment="Center" />
+                            <Border Background="#164E63"
+                                    CornerRadius="4"
+                                    Padding="7,2"
+                                    Margin="9,0,0,0"
+                                    VerticalAlignment="Center">
+                                <TextBlock Text="游戏闪退急诊室"
+                                           FontSize="11.5"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource BrandCyanBrush}" />
+                            </Border>
+                            <Border Background="#1E293B"
+                                    BorderBrush="#475569"
+                                    BorderThickness="1"
+                                    CornerRadius="4"
+                                    Padding="6,1"
+                                    Margin="6,0,0,0"
+                                    VerticalAlignment="Center">
+                                <TextBlock Text="v0.1-alpha"
+                                           FontSize="11"
+                                           Foreground="#CBD5E1" />
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Text="纯本地只读事后取证 · 零提权 · 不接触游戏进程"
+                                   FontSize="11.5"
+                                   Foreground="#94A3B8"
+                                   Margin="0,3,0,0" />
+                    </StackPanel>
                 </StackPanel>
 
-                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
-                    <TextBlock Text="扫描范围：" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{StaticResource TextSecondaryBrush}" />
-                    <ComboBox Width="190"
-                              ItemsSource="{Binding WindowPresets}"
-                              SelectedItem="{Binding SelectedWindowPreset}"
-                              DisplayMemberPath="DisplayName"
-                              VerticalAlignment="Center"
-                              Margin="0,0,12,0"
-                              AutomationProperties.Name="扫描时间范围" />
+                <WrapPanel Grid.Column="1"
+                           Orientation="Horizontal"
+                           VerticalAlignment="Center"
+                           HorizontalAlignment="Right"
+                           Margin="12,0,0,0">
+                    <Button Content="开始只读诊断 (F5)"
+                            Style="{StaticResource HeaderPrimaryButtonStyle}"
+                            Command="{Binding StartScanCommand}"
+                            Margin="0,2,8,2" />
+                    <Button Content="取消 (Esc)"
+                            Style="{StaticResource HeaderGhostButtonStyle}"
+                            Command="{Binding CancelScanCommand}"
+                            Margin="0,2,8,2" />
+                    <Button Content="预览与导出急诊单 (Ctrl+E)"
+                            Style="{StaticResource HeaderGhostButtonStyle}"
+                            IsEnabled="{Binding HasReport}"
+                            Click="OpenSharePreviewButton_Click"
+                            Margin="0,2,0,2" />
+                </WrapPanel>
+            </Grid>
+        </Border>
 
-                    <CheckBox Content="显示全部应用事件"
+        <!-- 2. Responsive Sub-Toolbar (Automatically Wraps on Narrow Windows) -->
+        <Border Grid.Row="1"
+                Style="{StaticResource CardBorderStyle}"
+                Padding="14,9"
+                Margin="0,0,0,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <WrapPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,3,16,3">
+                        <TextBlock Text="扫描时间窗："
+                                   VerticalAlignment="Center"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,6,0" />
+                        <ComboBox Width="185"
+                                  Style="{StaticResource ModernComboBoxStyle}"
+                                  ItemsSource="{Binding WindowPresets}"
+                                  SelectedItem="{Binding SelectedWindowPreset}"
+                                  DisplayMemberPath="DisplayName"
+                                  VerticalAlignment="Center"
+                                  AutomationProperties.Name="扫描时间范围" />
+                    </StackPanel>
+
+                    <CheckBox Content="显示全部应用事件（含系统外壳进程）"
+                              Style="{StaticResource ModernCheckBoxStyle}"
                               IsChecked="{Binding IncludeAllApplications}"
                               VerticalAlignment="Center"
-                              Margin="0,0,14,0"
+                              Margin="0,3,16,3"
                               ToolTip="默认会隐藏常见系统外壳进程崩溃；勾选后展示所有应用事件" />
-
-                    <Button Content="开始只读诊断 (F5)"
-                            Style="{StaticResource PrimaryButtonStyle}"
-                            Command="{Binding StartScanCommand}"
-                            Margin="0,0,8,0" />
-
-                    <Button Content="取消 (Esc)"
-                            Style="{StaticResource SecondaryButtonStyle}"
-                            Command="{Binding CancelScanCommand}"
-                            Margin="0,0,8,0" />
 
                     <Button Content="手选日志文件 (Ctrl+O)"
                             Style="{StaticResource SecondaryButtonStyle}"
                             Click="SelectManualLogButton_Click"
-                            Margin="0,0,8,0" />
+                            Margin="0,3,0,3" />
+                </WrapPanel>
 
-                    <Button Content="预览与导出急诊单 (Ctrl+E)"
-                            Style="{StaticResource PrimaryButtonStyle}"
-                            IsEnabled="{Binding HasReport}"
-                            Click="OpenSharePreviewButton_Click" />
-                </StackPanel>
-            </DockPanel>
+                <Border Grid.Column="1"
+                        Background="{StaticResource SubtleSurfaceBrush}"
+                        BorderBrush="{StaticResource SubtleSurfaceBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="5"
+                        Padding="9,4"
+                        Margin="12,0,0,0"
+                        VerticalAlignment="Center">
+                    <TextBlock Text="支持直接拖入单个 .log / .txt / .xml"
+                               FontSize="11.5"
+                               Foreground="{StaticResource TextMutedBrush}" />
+                </Border>
+            </Grid>
         </Border>
 
-        <!-- 2. Status & Partial Degradation Banner -->
-        <Border Grid.Row="1"
+        <!-- 3. Status & Partial Degradation Banner -->
+        <Border Grid.Row="2"
+                Style="{StaticResource CardBorderStyle}"
+                Padding="14,10"
                 Margin="0,0,0,10"
-                Padding="12,8"
-                CornerRadius="6"
-                BorderThickness="1"
-                BorderBrush="{StaticResource BorderBrushLight}"
-                Background="{StaticResource CardBackgroundBrush}"
                 Visibility="{Binding ShowStatusBanner, Converter={StaticResource BoolToVis}}">
             <StackPanel>
-                <TextBlock Text="{Binding StatusHeadline}" FontWeight="SemiBold" FontSize="13.5" />
-                <TextBlock Text="{Binding StatusDetail}" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
-                <TextBlock Text="{Binding PartialWarningText}"
-                           Foreground="{StaticResource WarningTextBrush}"
-                           Background="{StaticResource WarningBgBrush}"
-                           Padding="8,4"
-                           Margin="0,6,0,0"
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0"
+                            Width="8"
+                            Height="8"
+                            CornerRadius="4"
+                            Background="{StaticResource AccentBrush}"
+                            VerticalAlignment="Center"
+                            Margin="0,0,9,0" />
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding StatusHeadline}"
+                               FontWeight="Bold"
+                               FontSize="13.5"
+                               VerticalAlignment="Center" />
+                </Grid>
+
+                <ProgressBar IsIndeterminate="True"
+                             Height="3"
+                             Margin="0,7,0,3"
+                             Foreground="{StaticResource AccentBrush}"
+                             Background="{StaticResource NeutralBadgeBgBrush}"
+                             BorderThickness="0"
+                             Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}" />
+
+                <TextBlock Text="{Binding StatusDetail}"
+                           Foreground="{StaticResource TextSecondaryBrush}"
                            TextWrapping="Wrap"
-                           Visibility="{Binding HasPartialWarning, Converter={StaticResource BoolToVis}}" />
+                           Margin="17,4,0,0" />
+
+                <Border Background="{StaticResource WarningBgBrush}"
+                        BorderBrush="#FDE68A"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="10,6"
+                        Margin="0,8,0,0"
+                        Visibility="{Binding HasPartialWarning, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="{Binding PartialWarningText}"
+                               Foreground="{StaticResource WarningTextBrush}"
+                               FontSize="12"
+                               TextWrapping="Wrap" />
+                </Border>
             </StackPanel>
         </Border>
 
-        <!-- 3. Main Two-Column Split Content -->
-        <Grid Grid.Row="2">
+        <!-- 4. Main Two-Column Workspace -->
+        <Grid Grid.Row="3">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="360" MinWidth="280" />
-                <ColumnDefinition Width="6" />
-                <ColumnDefinition Width="*" MinWidth="460" />
+                <ColumnDefinition Width="345" MinWidth="260" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="*" MinWidth="420" />
             </Grid.ColumnDefinitions>
 
-            <!-- Left Column: Incident Candidates + Discovered Engine Logs -->
+            <!-- Left Column: Incident Candidates + Engine Logs -->
             <Grid Grid.Column="0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*" />
@@ -105,196 +237,388 @@
                 </Grid.RowDefinitions>
 
                 <!-- Candidate List Card -->
-                <Border Grid.Row="0" Style="{StaticResource CardBorderStyle}" Padding="10">
-                    <DockPanel>
-                        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                            <TextBlock Text="近期故障候选（按疑似游戏优先）" FontWeight="SemiBold" FontSize="14" />
-                            <TextBlock Text="{Binding FilteredNoiseHint}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       FontSize="12"
-                                       Margin="0,2,0,0" />
-                        </StackPanel>
+                <Border Grid.Row="0" Style="{StaticResource CardBorderStyle}" Padding="14">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
 
-                        <ListBox ItemsSource="{Binding Candidates}"
+                        <Grid Grid.Row="0" Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Text="近期故障候选" FontWeight="Bold" FontSize="14" />
+                                <TextBlock Text="疑似游戏目录自动置顶" FontSize="11.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0" />
+                            </StackPanel>
+                            <Border Grid.Column="1"
+                                    Background="{StaticResource NeutralBadgeBgBrush}"
+                                    CornerRadius="5"
+                                    Padding="7,3"
+                                    Margin="8,0,0,0"
+                                    VerticalAlignment="Top"
+                                    Visibility="{Binding HasFilteredNoiseHint, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="{Binding FilteredNoiseHint}"
+                                           FontSize="11"
+                                           Foreground="{StaticResource NeutralBadgeTextBrush}" />
+                            </Border>
+                        </Grid>
+
+                        <ListBox Grid.Row="1"
+                                 ItemsSource="{Binding Candidates}"
                                  SelectedItem="{Binding SelectedCandidate}"
+                                 ItemContainerStyle="{StaticResource CandidateListBoxItemStyle}"
                                  BorderThickness="0"
                                  Background="Transparent"
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 Visibility="{Binding HasCandidates, Converter={StaticResource BoolToVis}}"
                                  AutomationProperties.Name="近期故障候选列表">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
-                                    <Border BorderBrush="{StaticResource BorderBrushLight}"
-                                            BorderThickness="1"
-                                            CornerRadius="6"
-                                            Padding="10,8"
-                                            Margin="0,0,0,6"
-                                            Background="{StaticResource CardBackgroundBrush}">
-                                        <StackPanel>
-                                            <DockPanel>
-                                                <TextBlock Text="{Binding DisplayTitle}" FontWeight="SemiBold" FontSize="13.5" DockPanel.Dock="Left" />
-                                                <TextBlock Text="{Binding TimeDisplayText}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11.5" DockPanel.Dock="Right" VerticalAlignment="Center" />
-                                            </DockPanel>
-                                            <WrapPanel Margin="0,4,0,0">
-                                                <Border Background="{StaticResource NeutralBadgeBgBrush}" CornerRadius="4" Padding="6,2" Margin="0,0,6,2">
-                                                    <TextBlock Text="{Binding AnchorBadgeText}" FontSize="11" Foreground="{StaticResource NeutralBadgeTextBrush}" />
-                                                </Border>
-                                                <Border Background="{StaticResource NextActionBgBrush}" CornerRadius="4" Padding="6,2" Margin="0,0,6,2"
-                                                        Visibility="{Binding IsLikelyGame, Converter={StaticResource BoolToVis}}">
-                                                    <TextBlock Text="常见游戏目录" FontSize="11" Foreground="{StaticResource AccentBrush}" />
-                                                </Border>
-                                                <Border Background="{StaticResource WarningBgBrush}" CornerRadius="4" Padding="6,2" Margin="0,0,0,2"
-                                                        Visibility="{Binding HasMultipleOccurrences, Converter={StaticResource BoolToVis}}">
-                                                    <TextBlock Text="{Binding OccurrenceBadgeText}" FontSize="11" Foreground="{StaticResource WarningTextBrush}" />
-                                                </Border>
-                                            </WrapPanel>
-                                            <TextBlock Text="{Binding SubtitleText}"
-                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                    <StackPanel>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0"
+                                                       Text="{Binding DisplayTitle}"
+                                                       FontWeight="Bold"
+                                                       FontSize="13.5"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding TimeDisplayText}"
+                                                       Foreground="{StaticResource TextMutedBrush}"
                                                        FontSize="11.5"
-                                                       TextWrapping="Wrap"
-                                                       Margin="0,4,0,0" />
-                                        </StackPanel>
-                                    </Border>
+                                                       Margin="8,0,0,0"
+                                                       VerticalAlignment="Center" />
+                                        </Grid>
+
+                                        <WrapPanel Margin="0,6,0,0">
+                                            <Border Background="{StaticResource NeutralBadgeBgBrush}" CornerRadius="4" Padding="6,2" Margin="0,0,6,2">
+                                                <TextBlock Text="{Binding AnchorBadgeText}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource NeutralBadgeTextBrush}" />
+                                            </Border>
+                                            <Border Background="{StaticResource InfoBgBrush}" CornerRadius="4" Padding="6,2" Margin="0,0,6,2"
+                                                    Visibility="{Binding IsLikelyGame, Converter={StaticResource BoolToVis}}">
+                                                <TextBlock Text="常见游戏目录" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource InfoTextBrush}" />
+                                            </Border>
+                                            <Border Background="{StaticResource WarningBgBrush}" CornerRadius="4" Padding="6,2" Margin="0,0,0,2"
+                                                    Visibility="{Binding HasMultipleOccurrences, Converter={StaticResource BoolToVis}}">
+                                                <TextBlock Text="{Binding OccurrenceBadgeText}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource WarningTextBrush}" />
+                                            </Border>
+                                        </WrapPanel>
+
+                                        <TextBlock Text="{Binding SubtitleText}"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   FontSize="11.5"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,5,0,0" />
+                                    </StackPanel>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
                         </ListBox>
-                    </DockPanel>
+
+                        <!-- Empty Candidate Placeholder -->
+                        <Border Grid.Row="1"
+                                Background="{StaticResource SubtleSurfaceBrush}"
+                                BorderBrush="{StaticResource SubtleSurfaceBorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="16"
+                                VerticalAlignment="Center"
+                                Visibility="{Binding ShowNoCandidatesEmptyState, Converter={StaticResource BoolToVis}}">
+                            <StackPanel HorizontalAlignment="Center">
+                                <TextBlock Text="暂无待选故障事件"
+                                           FontWeight="SemiBold"
+                                           FontSize="13.5"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           HorizontalAlignment="Center" />
+                                <TextBlock Text="点击上方「开始只读诊断 (F5)」采集近期闪退或卡死事件；若未命中可切换 24 小时 / 7 天时间窗。"
+                                           FontSize="12"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           TextWrapping="Wrap"
+                                           TextAlignment="Center"
+                                           Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
                 </Border>
 
-                <!-- Engine Log Discovery & Manual Fallback Card -->
-                <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="10" Margin="0,8,0,0" MaxHeight="250">
+                <!-- Engine Log Confirmation Card -->
+                <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="14" Margin="0,10,0,0" MaxHeight="260">
                     <StackPanel>
-                        <DockPanel Margin="0,0,0,6">
-                            <TextBlock Text="游戏引擎日志（需您确认归属）" FontWeight="SemiBold" FontSize="13.5" DockPanel.Dock="Left" />
-                            <Button Content="清除关联"
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Text="游戏引擎日志" FontWeight="Bold" FontSize="13.5" />
+                                <TextBlock Text="需由您手动确认归属当前事故" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,1,0,0" />
+                            </StackPanel>
+                            <Button Grid.Column="1"
+                                    Content="清除关联"
                                     Style="{StaticResource SecondaryButtonStyle}"
-                                    Padding="8,2"
+                                    Padding="9,3"
                                     FontSize="11.5"
                                     Command="{Binding ClearEngineLogCommand}"
-                                    DockPanel.Dock="Right" />
-                        </DockPanel>
+                                    VerticalAlignment="Center"
+                                    Margin="8,0,0,0" />
+                        </Grid>
 
-                        <TextBlock Text="{Binding AttachedEngineLogSummary}"
-                                   FontSize="12"
-                                   Foreground="{StaticResource TextPrimaryBrush}"
-                                   TextWrapping="Wrap" />
+                        <Border Background="{StaticResource SubtleSurfaceBrush}"
+                                BorderBrush="{StaticResource SubtleSurfaceBorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Padding="9,6">
+                            <TextBlock Text="{Binding AttachedEngineLogSummary}"
+                                       FontSize="12"
+                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       TextWrapping="Wrap" />
+                        </Border>
+
                         <TextBlock Text="{Binding EngineLogFeedbackMessage}"
                                    FontSize="11.5"
+                                   FontWeight="SemiBold"
                                    Foreground="{StaticResource AccentBrush}"
                                    TextWrapping="Wrap"
-                                   Margin="0,3,0,6" />
+                                   Margin="0,6,0,0"
+                                   Visibility="{Binding HasEngineLogFeedback, Converter={StaticResource BoolToVis}}" />
 
-                        <TextBlock Text="扫描窗内发现的 Unity / Unreal 日志（点击确认关联）："
-                                   FontSize="11.5"
-                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                   Margin="0,0,0,4" />
+                        <StackPanel Margin="0,8,0,0" Visibility="{Binding HasDiscoveredEngineLogs, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="本时间窗内发现的 Unity / Unreal 日志："
+                                       FontSize="11.5"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       Margin="0,0,0,5" />
 
-                        <ListBox ItemsSource="{Binding DiscoveredEngineLogs}"
-                                 MaxHeight="105"
-                                 BorderThickness="0"
-                                 Background="Transparent"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                            <ListBox.ItemTemplate>
-                                <DataTemplate>
-                                    <DockPanel Margin="0,2">
-                                        <Button Content="确认关联"
-                                                DockPanel.Dock="Right"
-                                                Style="{StaticResource SecondaryButtonStyle}"
-                                                Padding="8,2"
-                                                FontSize="11.5"
-                                                Command="{Binding DataContext.AttachDiscoveredLogCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                CommandParameter="{Binding}" />
-                                        <StackPanel Margin="0,0,6,0">
-                                            <TextBlock Text="{Binding DisplayName}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                            <TextBlock Text="{Binding SanitizedLocationHint}" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis" />
-                                        </StackPanel>
-                                    </DockPanel>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
-
-                        <TextBlock Text="提示：也可直接把单个 .log / .txt / .xml 崩溃日志拖入本窗口"
-                                   FontSize="11"
-                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                   Margin="0,6,0,0" />
+                            <ListBox ItemsSource="{Binding DiscoveredEngineLogs}"
+                                     MaxHeight="105"
+                                     BorderThickness="0"
+                                     Background="Transparent"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,3">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding DisplayName}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding SanitizedLocationHint}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                            <Button Grid.Column="1"
+                                                    Content="确认关联"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Padding="9,3"
+                                                    FontSize="11.5"
+                                                    VerticalAlignment="Center"
+                                                    Command="{Binding DataContext.AttachDiscoveredLogCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
             </Grid>
 
-            <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch" Background="Transparent" />
+            <GridSplitter Grid.Column="1" Width="10" HorizontalAlignment="Stretch" Background="Transparent" />
 
-            <!-- Right Column: Three-Section Diagnosis Report -->
-            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+            <!-- Right Column: Three-Section Aligned Report -->
+            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
                 <StackPanel>
                     <!-- Section 1: Diagnosis Conclusions & Next Actions -->
                     <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,10">
                         <StackPanel>
-                            <DockPanel Margin="0,0,0,10">
-                                <TextBlock Text="一、诊断结论与下一步建议" FontSize="15" FontWeight="Bold" DockPanel.Dock="Left" />
-                                <TextBlock Text="{Binding ReportHeaderSummary}" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" DockPanel.Dock="Right" VerticalAlignment="Center" />
-                            </DockPanel>
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
 
-                            <ItemsControl ItemsSource="{Binding PrimaryFindings}">
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Border Style="{StaticResource SectionBadgeStyle}">
+                                        <TextBlock Text="1" Style="{StaticResource SectionBadgeTextStyle}" />
+                                    </Border>
+                                    <TextBlock Text="诊断结论与下一步建议"
+                                               FontSize="15"
+                                               FontWeight="Bold"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+
+                                <Border Grid.Column="1"
+                                        Background="{StaticResource NeutralBadgeBgBrush}"
+                                        CornerRadius="5"
+                                        Padding="9,4"
+                                        Margin="12,0,0,0"
+                                        VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding ReportHeaderSummary}"
+                                               FontSize="11.5"
+                                               FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextSecondaryBrush}" />
+                                </Border>
+                            </Grid>
+
+                            <!-- Idle Onboarding Guide -->
+                            <Border Background="{StaticResource SubtleSurfaceBrush}"
+                                    BorderBrush="{StaticResource SubtleSurfaceBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Padding="16"
+                                    Visibility="{Binding ShowIdleWelcome, Converter={StaticResource BoolToVis}}">
+                                <StackPanel>
+                                    <TextBlock Text="闪退发生后 30 秒急诊流程" FontSize="14" FontWeight="Bold" Margin="0,0,0,10" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="12" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="12" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <Border Grid.Column="0" Background="#FFFFFF" BorderBrush="{StaticResource BorderBrushLight}" BorderThickness="1" CornerRadius="7" Padding="12">
+                                            <StackPanel>
+                                                <TextBlock Text="① 一键只读取证" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" Margin="0,0,0,4" />
+                                                <TextBlock Text="点击左上「开始只读诊断 (F5)」，自动提取事件 XML、系统背景与 7 项环境基线。" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
+
+                                        <Border Grid.Column="2" Background="#FFFFFF" BorderBrush="{StaticResource BorderBrushLight}" BorderThickness="1" CornerRadius="7" Padding="12">
+                                            <StackPanel>
+                                                <TextBlock Text="② 确认事故与日志" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" Margin="0,0,0,4" />
+                                                <TextBlock Text="核对左侧故障程序与时间点；如为 Unity/Unreal 游戏可确认关联日志提升线索精度。" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
+
+                                        <Border Grid.Column="4" Background="#FFFFFF" BorderBrush="{StaticResource BorderBrushLight}" BorderThickness="1" CornerRadius="7" Padding="12">
+                                            <StackPanel>
+                                                <TextBlock Text="③ 导出脱敏急诊单" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" Margin="0,0,0,4" />
+                                                <TextBlock Text="预览并复制脱敏 Markdown 或保存 96-DPI 高清 PNG 长图，安全发往社区或 AI 排查。" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Findings Cards -->
+                            <ItemsControl ItemsSource="{Binding PrimaryFindings}"
+                                          Visibility="{Binding HasFindings, Converter={StaticResource BoolToVis}}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Border BorderBrush="{StaticResource BorderBrushLight}"
                                                 BorderThickness="1"
-                                                CornerRadius="6"
-                                                Padding="12"
-                                                Margin="0,0,0,8">
-                                            <StackPanel>
-                                                <DockPanel>
-                                                    <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" DockPanel.Dock="Left" TextWrapping="Wrap" />
-                                                    <TextBlock Text="{Binding RuleTag}" FontSize="11.5" Foreground="{StaticResource TextSecondaryBrush}" DockPanel.Dock="Right" VerticalAlignment="Center" />
-                                                </DockPanel>
+                                                CornerRadius="8"
+                                                Margin="0,0,0,10"
+                                                Background="#FFFFFF">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="4" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
 
-                                                <StackPanel Orientation="Horizontal" Margin="0,6,0,6">
-                                                    <Border Background="{StaticResource NeutralBadgeBgBrush}" CornerRadius="4" Padding="7,2" Margin="0,0,6,0">
-                                                        <TextBlock Text="{Binding AttributionText}" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource NeutralBadgeTextBrush}" />
-                                                    </Border>
-                                                    <Border CornerRadius="4" Padding="7,2">
-                                                        <Border.Style>
-                                                            <Style TargetType="Border">
-                                                                <Setter Property="Background" Value="{StaticResource NeutralBadgeBgBrush}" />
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding EvidenceStrength}" Value="{x:Static models:EvidenceStrength.ExplicitRecord}">
-                                                                        <Setter Property="Background" Value="{StaticResource SuccessBgBrush}" />
-                                                                    </DataTrigger>
-                                                                    <DataTrigger Binding="{Binding EvidenceStrength}" Value="{x:Static models:EvidenceStrength.LimitedClue}">
-                                                                        <Setter Property="Background" Value="{StaticResource WarningBgBrush}" />
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </Border.Style>
-                                                        <TextBlock Text="{Binding EvidenceStrengthText}" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
-                                                    </Border>
-                                                </StackPanel>
-
-                                                <TextBlock Text="{Binding Statement}" TextWrapping="Wrap" LineHeight="20" />
-
-                                                <TextBlock Text="{Binding AmbiguityText}"
-                                                           Foreground="{StaticResource WarningTextBrush}"
-                                                           FontSize="12"
-                                                           TextWrapping="Wrap"
-                                                           Margin="0,4,0,0"
-                                                           Visibility="{Binding HasAmbiguity, Converter={StaticResource BoolToVis}}" />
-
-                                                <Border Background="{StaticResource NextActionBgBrush}" CornerRadius="5" Padding="10,7" Margin="0,8,0,0">
-                                                    <StackPanel>
-                                                        <TextBlock Text="建议下一步：" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" />
-                                                        <TextBlock Text="{Binding NextActionText}" FontSize="12.5" TextWrapping="Wrap" Margin="0,2,0,0" />
-                                                    </StackPanel>
+                                                <Border Grid.Column="0" CornerRadius="8,0,0,8">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Background" Value="{StaticResource TextMutedBrush}" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding EvidenceStrength}" Value="{x:Static models:EvidenceStrength.ExplicitRecord}">
+                                                                    <Setter Property="Background" Value="{StaticResource SuccessAccentBrush}" />
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding EvidenceStrength}" Value="{x:Static models:EvidenceStrength.LimitedClue}">
+                                                                    <Setter Property="Background" Value="{StaticResource WarningAccentBrush}" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
                                                 </Border>
 
-                                                <Button Content="{Binding OfficialReferenceLabel}"
-                                                        HorizontalAlignment="Left"
-                                                        Margin="0,6,0,0"
-                                                        Padding="8,3"
-                                                        FontSize="11.5"
-                                                        Style="{StaticResource SecondaryButtonStyle}"
-                                                        Command="{Binding DataContext.OpenReferenceUrlCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                        CommandParameter="{Binding OfficialReferenceUrl}"
-                                                        Visibility="{Binding HasOfficialReference, Converter={StaticResource BoolToVis}}" />
-                                            </StackPanel>
+                                                <StackPanel Grid.Column="1" Margin="14,12">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0"
+                                                                   Text="{Binding Title}"
+                                                                   FontSize="14.5"
+                                                                   FontWeight="Bold"
+                                                                   TextWrapping="Wrap"
+                                                                   VerticalAlignment="Center" />
+                                                        <Border Grid.Column="1"
+                                                                Background="{StaticResource SubtleSurfaceBrush}"
+                                                                BorderBrush="{StaticResource SubtleSurfaceBorderBrush}"
+                                                                BorderThickness="1"
+                                                                CornerRadius="4"
+                                                                Padding="6,2"
+                                                                Margin="10,0,0,0"
+                                                                VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding RuleTag}"
+                                                                       FontSize="11"
+                                                                       Foreground="{StaticResource TextMutedBrush}" />
+                                                        </Border>
+                                                    </Grid>
+
+                                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,8">
+                                                        <Border Background="{StaticResource NeutralBadgeBgBrush}" CornerRadius="5" Padding="8,3" Margin="0,0,8,0">
+                                                            <TextBlock Text="{Binding AttributionText}" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource NeutralBadgeTextBrush}" />
+                                                        </Border>
+                                                        <Border CornerRadius="5" Padding="8,3">
+                                                            <Border.Style>
+                                                                <Style TargetType="Border">
+                                                                    <Setter Property="Background" Value="{StaticResource NeutralBadgeBgBrush}" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding EvidenceStrength}" Value="{x:Static models:EvidenceStrength.ExplicitRecord}">
+                                                                            <Setter Property="Background" Value="{StaticResource SuccessBgBrush}" />
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding EvidenceStrength}" Value="{x:Static models:EvidenceStrength.LimitedClue}">
+                                                                            <Setter Property="Background" Value="{StaticResource WarningBgBrush}" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Border.Style>
+                                                            <TextBlock Text="{Binding EvidenceStrengthText}" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
+                                                        </Border>
+                                                    </StackPanel>
+
+                                                    <TextBlock Text="{Binding Statement}" TextWrapping="Wrap" LineHeight="21" />
+
+                                                    <TextBlock Text="{Binding AmbiguityText}"
+                                                               Foreground="{StaticResource WarningTextBrush}"
+                                                               FontSize="12"
+                                                               TextWrapping="Wrap"
+                                                               Margin="0,6,0,0"
+                                                               Visibility="{Binding HasAmbiguity, Converter={StaticResource BoolToVis}}" />
+
+                                                    <Border Background="{StaticResource NextActionBgBrush}"
+                                                            BorderBrush="{StaticResource NextActionBorderBrush}"
+                                                            BorderThickness="1"
+                                                            CornerRadius="6"
+                                                            Padding="11,8"
+                                                            Margin="0,10,0,0">
+                                                        <StackPanel>
+                                                            <TextBlock Text="建议下一步：" FontSize="12" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" />
+                                                            <TextBlock Text="{Binding NextActionText}" FontSize="12.5" TextWrapping="Wrap" LineHeight="19" Margin="0,2,0,0" />
+                                                        </StackPanel>
+                                                    </Border>
+
+                                                    <Button Content="{Binding OfficialReferenceLabel}"
+                                                            HorizontalAlignment="Left"
+                                                            Margin="0,8,0,0"
+                                                            Padding="10,4"
+                                                            FontSize="11.5"
+                                                            Style="{StaticResource SecondaryButtonStyle}"
+                                                            Command="{Binding DataContext.OpenReferenceUrlCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding OfficialReferenceUrl}"
+                                                            Visibility="{Binding HasOfficialReference, Converter={StaticResource BoolToVis}}" />
+                                                </StackPanel>
+                                            </Grid>
                                         </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
@@ -302,31 +626,49 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Section 2: Collapsible Technical Evidence, System Background & Coverage -->
+                    <!-- Section 2: Flush-Left Aligned Collapsible Technical Evidence -->
                     <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,10">
-                        <Expander IsExpanded="False" Header="二、技术证据定位、系统背景事件与数据源覆盖（点击展开核对）" FontWeight="SemiBold">
-                            <StackPanel Margin="0,10,0,0">
-                                <TextBlock Text="原始证据定位" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                <ItemsControl ItemsSource="{Binding EvidenceItems}" Margin="0,0,0,10">
+                        <Expander IsExpanded="False" Style="{StaticResource ModernExpanderStyle}">
+                            <Expander.Header>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Border Style="{StaticResource SectionBadgeStyle}">
+                                        <TextBlock Text="2" Style="{StaticResource SectionBadgeTextStyle}" />
+                                    </Border>
+                                    <TextBlock Text="技术证据定位、系统背景事件与数据源覆盖"
+                                               FontSize="15"
+                                               FontWeight="Bold"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Expander.Header>
+
+                            <StackPanel Margin="0,6,0,0">
+                                <TextBlock Text="原始证据定位" FontWeight="Bold" Margin="0,0,0,6" />
+                                <TextBlock Text="暂无证据记录（请先运行扫描）。"
+                                           FontSize="12"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           Margin="0,0,0,10"
+                                           Visibility="{Binding ShowIdleWelcome, Converter={StaticResource BoolToVis}}" />
+
+                                <ItemsControl ItemsSource="{Binding EvidenceItems}" Margin="0,0,0,12">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <Border BorderBrush="{StaticResource BorderBrushLight}" BorderThickness="0,0,0,1" Padding="0,5">
+                                            <Border BorderBrush="{StaticResource SubtleSurfaceBorderBrush}" BorderThickness="0,0,0,1" Padding="0,6">
                                                 <StackPanel>
                                                     <TextBlock FontSize="12" FontWeight="SemiBold">
                                                         <Run Text="{Binding SourceKindText, Mode=OneWay}" />
                                                         <Run Text=" · " />
                                                         <Run Text="{Binding TimestampText, Mode=OneWay}" />
                                                     </TextBlock>
-                                                    <TextBlock Text="{Binding SourceLocation}" FontSize="11.5" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" />
-                                                    <TextBlock Text="{Binding SummaryText}" FontSize="11.5" TextWrapping="Wrap" />
+                                                    <TextBlock Text="{Binding SourceLocation}" FontSize="11.5" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                                    <TextBlock Text="{Binding SummaryText}" FontSize="11.5" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,1,0,0" />
                                                 </StackPanel>
                                             </Border>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
 
-                                <TextBlock Text="系统背景时间线（仅系统背景，无具体进程归属，非崩溃根因）" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                <ItemsControl ItemsSource="{Binding SystemBackgroundItems}" Margin="0,0,0,10">
+                                <TextBlock Text="系统背景时间线（仅系统背景，无具体进程归属，非崩溃根因）" FontWeight="Bold" Margin="0,0,0,6" />
+                                <ItemsControl ItemsSource="{Binding SystemBackgroundItems}" Margin="0,0,0,12">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <TextBlock FontSize="12" TextWrapping="Wrap" Margin="0,2">
@@ -341,7 +683,7 @@
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
 
-                                <TextBlock Text="数据源采集覆盖范围" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <TextBlock Text="数据源采集覆盖范围" FontWeight="Bold" Margin="0,0,0,6" />
                                 <ItemsControl ItemsSource="{Binding CoverageItems}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
@@ -364,15 +706,68 @@
                     <!-- Section 3: 7 Neutral Environment Facts -->
                     <Border Style="{StaticResource CardBorderStyle}">
                         <StackPanel>
-                            <DockPanel Margin="0,0,0,8">
-                                <TextBlock Text="三、本机环境事实快照（中性参考，非崩溃归因）" FontSize="14.5" FontWeight="Bold" DockPanel.Dock="Left" />
-                            </DockPanel>
-                            <ItemsControl ItemsSource="{Binding EnvironmentItems}">
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Border Style="{StaticResource SectionBadgeStyle}">
+                                        <TextBlock Text="3" Style="{StaticResource SectionBadgeTextStyle}" />
+                                    </Border>
+                                    <TextBlock Text="本机环境事实快照"
+                                               FontSize="15"
+                                               FontWeight="Bold"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+
+                                <Border Grid.Column="1"
+                                        Background="{StaticResource NeutralBadgeBgBrush}"
+                                        CornerRadius="5"
+                                        Padding="9,4"
+                                        Margin="12,0,0,0"
+                                        VerticalAlignment="Center">
+                                    <TextBlock Text="中性参考 · 非崩溃归因"
+                                               FontSize="11.5"
+                                               FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextSecondaryBrush}" />
+                                </Border>
+                            </Grid>
+
+                            <Border Background="{StaticResource SubtleSurfaceBrush}"
+                                    BorderBrush="{StaticResource SubtleSurfaceBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="7"
+                                    Padding="12"
+                                    Visibility="{Binding ShowIdleWelcome, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="扫描后将自动在此展示显卡发布日期、目标路径特征、OneDrive 文档同步、VC++ 运行库、页面文件、覆盖层快照与系统区域 7 项只读环境事实。"
+                                           FontSize="12"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           TextWrapping="Wrap" />
+                            </Border>
+
+                            <ItemsControl ItemsSource="{Binding EnvironmentItems}"
+                                          Visibility="{Binding HasEnvironmentFacts, Converter={StaticResource BoolToVis}}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border BorderBrush="{StaticResource BorderBrushLight}" BorderThickness="0,0,0,1" Padding="0,6">
-                                            <DockPanel>
-                                                <Border DockPanel.Dock="Right" CornerRadius="4" Padding="6,2" VerticalAlignment="Center" Margin="8,0,0,0">
+                                        <Border BorderBrush="{StaticResource SubtleSurfaceBorderBrush}" BorderThickness="0,0,0,1" Padding="0,8">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}" FontSize="12.5" FontWeight="SemiBold" />
+                                                    <TextBlock Text="{Binding ValueText}" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                                </StackPanel>
+
+                                                <Border Grid.Column="1"
+                                                        CornerRadius="5"
+                                                        Padding="8,3"
+                                                        VerticalAlignment="Center"
+                                                        Margin="10,0,0,0">
                                                     <Border.Style>
                                                         <Style TargetType="Border">
                                                             <Setter Property="Background" Value="{StaticResource NeutralBadgeBgBrush}" />
@@ -383,13 +778,9 @@
                                                             </Style.Triggers>
                                                         </Style>
                                                     </Border.Style>
-                                                    <TextBlock Text="{Binding NoticeBadgeText}" FontSize="11" FontWeight="SemiBold" />
+                                                    <TextBlock Text="{Binding NoticeBadgeText}" FontSize="11.5" FontWeight="SemiBold" />
                                                 </Border>
-                                                <StackPanel>
-                                                    <TextBlock Text="{Binding Name}" FontSize="12.5" FontWeight="SemiBold" />
-                                                    <TextBlock Text="{Binding ValueText}" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,2,0,0" />
-                                                </StackPanel>
-                                            </DockPanel>
+                                            </Grid>
                                         </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
@@ -400,11 +791,22 @@
             </ScrollViewer>
         </Grid>
 
-        <!-- 4. Footer Status Strip -->
-        <TextBlock Grid.Row="3"
-                   Margin="0,8,0,0"
-                   FontSize="11.5"
-                   Foreground="{StaticResource TextSecondaryBrush}"
-                   Text="v0.1-alpha · 纯本地只读 · 零提权 (asInvoker) · 反作弊零接触 · 零网络请求 · 关闭窗口即释放全部内存数据（支持预览并导出脱敏 PNG / Markdown 急诊单）" />
+        <!-- 5. Clean Footer Status Strip -->
+        <Grid Grid.Row="4" Margin="2,10,2,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       FontSize="11.5"
+                       Foreground="{StaticResource TextMutedBrush}"
+                       Text="纯本地只读 · 零提权 (asInvoker) · 反作弊零接触 · 零网络请求 · 关闭窗口即释放内存"
+                       TextTrimming="CharacterEllipsis" />
+            <TextBlock Grid.Column="1"
+                       FontSize="11.5"
+                       Foreground="{StaticResource TextMutedBrush}"
+                       Margin="12,0,0,0"
+                       Text="快捷键：F5 扫描 | Esc 取消 | Ctrl+O 选日志 | Ctrl+E 导出" />
+        </Grid>
     </Grid>
 </Window>

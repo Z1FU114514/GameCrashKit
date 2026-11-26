@@ -129,11 +129,13 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             if (SetProperty(ref _uiState, value))
             {
                 OnPropertyChanged(nameof(ShowStatusBanner));
+                OnPropertyChanged(nameof(ShowIdleWelcome));
             }
         }
     }
 
     public bool ShowStatusBanner => UiState is AppUiState.Scanning or AppUiState.PartialCompleted or AppUiState.NoRecords or AppUiState.Failed or AppUiState.Cancelled;
+    public bool ShowIdleWelcome => UiState == AppUiState.Idle;
 
     public bool IsScanning
     {
@@ -144,6 +146,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             {
                 StartScanCommand.RaiseCanExecuteChanged();
                 CancelScanCommand.RaiseCanExecuteChanged();
+                OnPropertyChanged(nameof(ShowNoCandidatesEmptyState));
             }
         }
     }
@@ -175,8 +178,16 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     public string FilteredNoiseHint
     {
         get => _filteredNoiseHint;
-        private set => SetProperty(ref _filteredNoiseHint, value);
+        private set
+        {
+            if (SetProperty(ref _filteredNoiseHint, value))
+            {
+                OnPropertyChanged(nameof(HasFilteredNoiseHint));
+            }
+        }
     }
+
+    public bool HasFilteredNoiseHint => !string.IsNullOrWhiteSpace(FilteredNoiseHint);
 
     public ObservableCollection<CandidateItemViewModel> Candidates { get; } = [];
 
@@ -215,8 +226,16 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     public string EngineLogFeedbackMessage
     {
         get => _engineLogFeedbackMessage;
-        private set => SetProperty(ref _engineLogFeedbackMessage, value);
+        private set
+        {
+            if (SetProperty(ref _engineLogFeedbackMessage, value))
+            {
+                OnPropertyChanged(nameof(HasEngineLogFeedback));
+            }
+        }
     }
+
+    public bool HasEngineLogFeedback => !string.IsNullOrWhiteSpace(EngineLogFeedbackMessage);
 
     public string ReportHeaderSummary
     {
@@ -237,6 +256,14 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     }
 
     public bool HasReport => CurrentReport is not null;
+    public bool HasCandidates => Candidates.Count > 0;
+    public bool ShowNoCandidatesEmptyState => !IsScanning && Candidates.Count == 0;
+    public bool HasDiscoveredEngineLogs => DiscoveredEngineLogs.Count > 0;
+    public bool HasFindings => PrimaryFindings.Count > 0;
+    public bool HasEnvironmentFacts => EnvironmentItems.Count > 0;
+    public bool HasSystemBackground => SystemBackgroundItems.Count > 0;
+    public bool HasEvidenceItems => EvidenceItems.Count > 0;
+    public bool HasCoverageItems => CoverageItems.Count > 0;
 
     public ObservableCollection<FindingCardViewModel> PrimaryFindings { get; } = [];
     public ObservableCollection<EvidenceRowViewModel> EvidenceItems { get; } = [];
@@ -432,6 +459,8 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         {
             DiscoveredEngineLogs.Add(item);
         }
+
+        OnPropertyChanged(nameof(HasDiscoveredEngineLogs));
     }
 
     private void PopulateCandidates(ScanSessionResult session)
@@ -473,8 +502,11 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         }
 
         FilteredNoiseHint = session.Correlated.FilteredNoiseCount > 0
-            ? $"已默认隐藏 {session.Correlated.FilteredNoiseCount} 条系统常见进程崩溃"
+            ? $"已默认隐藏 {session.Correlated.FilteredNoiseCount} 条系统常见进程"
             : string.Empty;
+
+        OnPropertyChanged(nameof(HasCandidates));
+        OnPropertyChanged(nameof(ShowNoCandidatesEmptyState));
     }
 
     private void RebuildReport()
@@ -489,6 +521,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         {
             CurrentReport = null;
             ReportHeaderSummary = "尚未执行扫描";
+            RaiseReportCollectionProperties();
             return;
         }
 
@@ -550,6 +583,16 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         }
 
         PopulateEnvironmentFacts(report.Environment);
+        RaiseReportCollectionProperties();
+    }
+
+    private void RaiseReportCollectionProperties()
+    {
+        OnPropertyChanged(nameof(HasFindings));
+        OnPropertyChanged(nameof(HasEnvironmentFacts));
+        OnPropertyChanged(nameof(HasSystemBackground));
+        OnPropertyChanged(nameof(HasEvidenceItems));
+        OnPropertyChanged(nameof(HasCoverageItems));
     }
 
     private void PopulateEnvironmentFacts(EnvironmentSnapshot? env)
@@ -651,5 +694,9 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         SystemBackgroundItems.Clear();
         CoverageItems.Clear();
         EnvironmentItems.Clear();
+        OnPropertyChanged(nameof(HasCandidates));
+        OnPropertyChanged(nameof(ShowNoCandidatesEmptyState));
+        OnPropertyChanged(nameof(HasDiscoveredEngineLogs));
+        RaiseReportCollectionProperties();
     }
 }

@@ -28,8 +28,8 @@
 * **构建命令**：
   `dotnet publish src/GameCrashKit.App/GameCrashKit.App.csproj -c Release -r win-x64 --self-contained true -p:PublishTrimmed=false -o publish/GameCrashKit-v0.1-alpha-win-x64`
 * **便携包附件**：已随包附带 `LICENSE-MIT`、`LICENSE-APACHE`、`README.md`、`PRIVACY.md`、`SUPPORT_MATRIX.md`
-* **压缩产物**：`publish/GameCrashKit-v0.1-alpha-win-x64.zip`（`62.31 MB`）
-* **SHA-256**：`1be1da8ce0694d533dfd86f680b51789d47ada6870df1c4c08aa2019429e563b`
+* **压缩产物**：`publish/GameCrashKit-v0.1-alpha-win-x64.zip`（`62.32 MB`）
+* **SHA-256**：`06bd5c3fed34ac8a6d443dfc75ff7c32afcb890979836daed2b60b3670da41fc`
 
 > 说明：`publish/` 目录已在 `.gitignore` 中忽略，不纳入 Git 源码仓库跟踪。
 
