@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Input;
 using GameCrashKit.App.ViewModels;
+using GameCrashKit.App.Views;
 using Microsoft.Win32;
 
 namespace GameCrashKit.App;
@@ -18,6 +19,7 @@ public partial class MainWindow : Window
         InputBindings.Add(new KeyBinding(_viewModel.StartScanCommand, new KeyGesture(Key.F5)));
         InputBindings.Add(new KeyBinding(_viewModel.CancelScanCommand, new KeyGesture(Key.Escape)));
         InputBindings.Add(new KeyBinding(new RelayCommand(OpenManualLogPicker), new KeyGesture(Key.O, ModifierKeys.Control)));
+        InputBindings.Add(new KeyBinding(new RelayCommand(OpenSharePreview), new KeyGesture(Key.E, ModifierKeys.Control)));
 
         Closed += (_, _) => _viewModel.Dispose();
     }
@@ -25,6 +27,26 @@ public partial class MainWindow : Window
     private void SelectManualLogButton_Click(object sender, RoutedEventArgs e)
     {
         OpenManualLogPicker();
+    }
+
+    private void OpenSharePreviewButton_Click(object sender, RoutedEventArgs e)
+    {
+        OpenSharePreview();
+    }
+
+    private void OpenSharePreview()
+    {
+        if (_viewModel.CurrentReport is null)
+        {
+            return;
+        }
+
+        var vm = new SharePreviewViewModel(_viewModel.CurrentReport);
+        var win = new SharePreviewWindow(vm)
+        {
+            Owner = this
+        };
+        win.ShowDialog();
     }
 
     private void OpenManualLogPicker()

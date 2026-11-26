@@ -56,7 +56,13 @@
 
                     <Button Content="手选日志文件 (Ctrl+O)"
                             Style="{StaticResource SecondaryButtonStyle}"
-                            Click="SelectManualLogButton_Click" />
+                            Click="SelectManualLogButton_Click"
+                            Margin="0,0,8,0" />
+
+                    <Button Content="预览与导出急诊单 (Ctrl+E)"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            IsEnabled="{Binding HasReport}"
+                            Click="OpenSharePreviewButton_Click" />
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -399,6 +405,6 @@
                    Margin="0,8,0,0"
                    FontSize="11.5"
                    Foreground="{StaticResource TextSecondaryBrush}"
-                   Text="v0.1-alpha · 纯本地只读 · 零提权 (asInvoker) · 反作弊零接触 · 零网络请求 · 关闭窗口即释放全部内存数据（PNG/Markdown 急诊单导出将在 M3 阶段交付）" />
+                   Text="v0.1-alpha · 纯本地只读 · 零提权 (asInvoker) · 反作弊零接触 · 零网络请求 · 关闭窗口即释放全部内存数据（支持预览并导出脱敏 PNG / Markdown 急诊单）" />
     </Grid>
 </Window>

@@ -88,6 +88,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     private string _attachedEngineLogSummary = "尚未确认关联任何游戏引擎日志";
     private string _engineLogFeedbackMessage = string.Empty;
     private string _reportHeaderSummary = "尚未生成诊断报告";
+    private DiagnosisReport? _currentReport;
 
     public MainViewModel()
     {
@@ -222,6 +223,20 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         get => _reportHeaderSummary;
         private set => SetProperty(ref _reportHeaderSummary, value);
     }
+
+    public DiagnosisReport? CurrentReport
+    {
+        get => _currentReport;
+        private set
+        {
+            if (SetProperty(ref _currentReport, value))
+            {
+                OnPropertyChanged(nameof(HasReport));
+            }
+        }
+    }
+
+    public bool HasReport => CurrentReport is not null;
 
     public ObservableCollection<FindingCardViewModel> PrimaryFindings { get; } = [];
     public ObservableCollection<EvidenceRowViewModel> EvidenceItems { get; } = [];
@@ -472,6 +487,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
 
         if (_currentSession is null)
         {
+            CurrentReport = null;
             ReportHeaderSummary = "尚未执行扫描";
             return;
         }
@@ -480,6 +496,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             _currentSession,
             SelectedCandidate?.Model,
             _confirmedEngineLog);
+        CurrentReport = report;
 
         ReportHeaderSummary = report.SelectedIncident is null
             ? $"证据不足报告 · 规则集 {report.RulesetVersion}"
@@ -626,6 +643,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         _activeScanCts = null;
         _currentSession = null;
         _confirmedEngineLog = null;
+        CurrentReport = null;
         Candidates.Clear();
         DiscoveredEngineLogs.Clear();
         PrimaryFindings.Clear();
