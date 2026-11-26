@@ -351,7 +351,7 @@ internal static class Program
         var dpiOk = Math.Abs(decoded.DpiX - EmergencyCardPngRenderer.TargetDpi) < 0.1 &&
                     Math.Abs(decoded.DpiY - EmergencyCardPngRenderer.TargetDpi) < 0.1;
         var bodySampleY = Math.Clamp(200, 10, Math.Max(10, decoded.PixelHeight - 10));
-        var isWhiteBodyCanvas = SamplePixelIsWhite(decoded, 10, bodySampleY, out var bodyRgba);
+        var isLightBodyCanvas = SamplePixelIsLightCanvas(decoded, 10, bodySampleY, out var bodyRgba);
 
         recorder.Record(
             "Check4b.PngEmergencyCard",
@@ -359,7 +359,7 @@ internal static class Program
             pngResult.PixelWidth == EmergencyCardPngRenderer.CardWidth &&
             pngResult.PixelHeight > 0 &&
             dpiOk &&
-            isWhiteBodyCanvas,
+            isLightBodyCanvas,
             $"Path={pngPath}, Size={pngResult.PixelWidth}x{pngResult.PixelHeight}, DPI={decoded.DpiX:F1}x{decoded.DpiY:F1}, BodyCanvasRGBA(10,{bodySampleY})={bodyRgba}, Bytes={pngResult.PngBytes.Length}");
     }
 
@@ -513,14 +513,14 @@ internal static class Program
         return bytes.Length >= expected.Length && bytes.AsSpan(0, expected.Length).SequenceEqual(expected);
     }
 
-    private static bool SamplePixelIsWhite(BitmapSource bitmap, int x, int y, out string rgbaText)
+    private static bool SamplePixelIsLightCanvas(BitmapSource bitmap, int x, int y, out string rgbaText)
     {
         var converted = new FormatConvertedBitmap(bitmap, PixelFormats.Bgra32, null, 0);
         var pixel = new byte[4];
         converted.CopyPixels(new Int32Rect(x, y, 1, 1), pixel, 4, 0);
-        // Bgra32 layout: [B, G, R, A]
+        // Bgra32 layout: [B, G, R, A] - accept white (#FFFFFF) or light canvas (#F6F8FA), rejecting dark theme (#0B0E14/#131822)
         rgbaText = string.Create(CultureInfo.InvariantCulture, $"({pixel[2]},{pixel[1]},{pixel[0]},{pixel[3]})");
-        return pixel[2] == 255 && pixel[1] == 255 && pixel[0] == 255 && pixel[3] == 255;
+        return pixel[2] >= 240 && pixel[1] >= 240 && pixel[0] >= 240 && pixel[3] == 255;
     }
 
     private static string ComputeSha256(string path)
