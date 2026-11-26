@@ -6,6 +6,7 @@ using GameCrashKit.App.Rendering;
 using GameCrashKit.Core.Exporters;
 using GameCrashKit.Core.Models;
 using GameCrashKit.Core.Privacy;
+using GameCrashKit.Windows.FileSystem;
 
 namespace GameCrashKit.App.ViewModels;
 
@@ -72,7 +73,7 @@ public sealed class SharePreviewViewModel : ViewModelBase
     }
 
     public bool CanIncludeExcerpt =>
-        _report.SelectedIncident?.ConfirmedEngineLog?.RawErrorExcerptLines is { Count: > 0 };
+        _report.SelectedIncident?.ConfirmedEngineLog is not null;
 
     public bool IncludeScrubbedErrorExcerpt
     {
@@ -199,15 +200,7 @@ public sealed class SharePreviewViewModel : ViewModelBase
             return false;
         }
 
-        try
-        {
-            var normalizedTarget = Path.GetFullPath(targetPath.Trim());
-            return string.Equals(normalizedTarget, _attachedSourceLogFullPath, StringComparison.OrdinalIgnoreCase);
-        }
-        catch (Exception)
-        {
-            return false;
-        }
+        return SafeLocalFileReader.AreSameLocalFile(targetPath, _attachedSourceLogFullPath);
     }
 
     private static bool IsOneDriveSyncTarget(string targetPath)

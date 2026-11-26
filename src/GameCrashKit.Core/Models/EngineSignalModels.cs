@@ -7,6 +7,13 @@ public enum EngineLogKind
     GenericManual
 }
 
+public enum LogFatalityKind
+{
+    Unknown = 0,
+    Fatal,
+    NonFatalEnsure
+}
+
 public sealed record UserConfirmedEngineLog(
     EngineLogKind Kind,
     string DisplayLabel,
@@ -20,4 +27,5 @@ public sealed record UserConfirmedEngineLog(
     string? GpuLostToken,
     bool HasOutOfMemorySignal,
     string? OomToken,
-    IReadOnlyList<string> RawErrorExcerptLines);
+    IReadOnlyList<string> RawErrorExcerptLines,
+    LogFatalityKind Fatality = LogFatalityKind.Unknown);

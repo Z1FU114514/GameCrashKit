@@ -2,7 +2,7 @@
 
 面向 Windows PC 玩家与轻度 Mod 玩家的**开源、纯本地、零提权、只读式事后游戏闪退取证与脱敏急诊单工具**。
 
-> **当前版本**：`v0.1.0-alpha.1`（公开预览版 · 绿色免安装，纯本地只读运行）。详见 [更新日志](docs/CHANGELOG.md) 与 [支持范围](docs/SUPPORT_MATRIX.md)。
+> **当前版本**：`v0.1.0-alpha.2`（公开预览版 · 绿色免安装，纯本地只读运行）。详见 [更新日志](docs/CHANGELOG.md) 与 [支持范围](docs/SUPPORT_MATRIX.md)。
 
 ## 核心功能与设计亮点
 
@@ -20,7 +20,7 @@
 
 ## 下载与免安装使用
 
-1. 前往仓库 **Releases** 页面下载便携版压缩包（`GameCrashKit-v0.1.0-alpha.1-win-x64.zip`）与校验文件 `SHA256SUMS.txt`；程序已自包含运行环境，无需预装 .NET。
+1. 前往仓库 **Releases** 页面下载便携版压缩包（`GameCrashKit-v0.1.0-alpha.2-win-x64.zip`）与校验文件 `SHA256SUMS.txt`；程序已自包含运行环境，无需预装 .NET。
 2. 建议先核对 ZIP 文件的 SHA-256 校验值，解压到任意本地目录后直接双击 `GameCrashKit.App.exe` 运行（无需安装、不弹出 UAC）。
 3. **关于 Windows SmartScreen 提示**：`v0.1.0-alpha.1` 暂未购买商业代码签名证书，部分机器初次运行时可能看到“未知发布者”拦截提示；核对官方 SHA-256 无误后点「更多信息 → 仍要运行」即可，无需关闭系统防护软件。
 

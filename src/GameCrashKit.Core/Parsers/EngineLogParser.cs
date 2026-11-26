@@ -55,9 +55,11 @@ public static class EngineLogParser
     [
         "DXGI_ERROR_",
         "VK_ERROR_",
+        "0x887A",
         "Out of video memory",
         "Ran out of memory",
         "Could not allocate memory",
+        "E_OUTOFMEMORY",
         "GPU Crash dump Triggered",
         "D3D device being lost",
         "Crash!!!",
@@ -119,6 +121,8 @@ public static class EngineLogParser
         var (hasGpuLost, gpuToken) = DetectFirstToken(lines, GpuLostTokens);
         var (hasOom, oomToken) = DetectFirstToken(lines, OomTokens);
         var excerpts = ExtractSignalExcerptLines(lines);
+        var hasCrashMarker = lines.Any(static l => l.Contains("Crash!!!", StringComparison.OrdinalIgnoreCase));
+        var fatality = (hasGpuLost || hasOom || hasCrashMarker) ? LogFatalityKind.Fatal : LogFatalityKind.Unknown;
 
         return new UserConfirmedEngineLog(
             Kind: EngineLogKind.Unity,
@@ -133,7 +137,8 @@ public static class EngineLogParser
             GpuLostToken: gpuToken,
             HasOutOfMemorySignal: hasOom,
             OomToken: oomToken,
-            RawErrorExcerptLines: excerpts);
+            RawErrorExcerptLines: excerpts,
+            Fatality: fatality);
     }
 
     public static UserConfirmedEngineLog ParseUnrealCrashContextXml(
@@ -143,7 +148,10 @@ public static class EngineLogParser
         DateTimeOffset? lastWriteUtc,
         bool isTruncated)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(xmlContent);
+        if (string.IsNullOrWhiteSpace(xmlContent))
+        {
+            throw new FormatException("Unreal CrashContext XML 文件为空，未包含有效上下文。");
+        }
 
         using var sr = new StringReader(xmlContent);
         using var reader = XmlReader.Create(sr, SafeXmlSettings);
@@ -164,7 +172,13 @@ public static class EngineLogParser
         var engineVersion = GetElementValue(props, "EngineVersion");
         var rhi = GetElementValue(props, "RHI");
         var crashType = GetElementValue(props, "CrashType");
+        var isEnsureText = GetElementValue(props, "IsEnsure");
         var errorMessage = GetElementValue(props, "ErrorMessage");
+
+        var isEnsure =
+            string.Equals(isEnsureText, "true", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(isEnsureText, "1", StringComparison.OrdinalIgnoreCase) ||
+            (!string.IsNullOrWhiteSpace(crashType) && crashType.Contains("Ensure", StringComparison.OrdinalIgnoreCase));
 
         var candidateLines = new List<string>();
         if (!string.IsNullOrWhiteSpace(crashType))
@@ -182,6 +196,12 @@ public static class EngineLogParser
 
         var (hasGpuLost, gpuToken) = DetectFirstToken(candidateLines, GpuLostTokens);
         var (hasOom, oomToken) = DetectFirstToken(candidateLines, OomTokens);
+
+        var fatality = isEnsure
+            ? LogFatalityKind.NonFatalEnsure
+            : (!string.IsNullOrWhiteSpace(crashType) || !string.IsNullOrWhiteSpace(errorMessage) || hasGpuLost || hasOom)
+                ? LogFatalityKind.Fatal
+                : LogFatalityKind.Unknown;
 
         var excerptSource = !string.IsNullOrWhiteSpace(errorMessage)
             ? SplitBoundedLines(errorMessage)
@@ -201,7 +221,8 @@ public static class EngineLogParser
             GpuLostToken: gpuToken,
             HasOutOfMemorySignal: hasOom,
             OomToken: oomToken,
-            RawErrorExcerptLines: excerpts);
+            RawErrorExcerptLines: excerpts,
+            Fatality: fatality);
     }
 
     public static UserConfirmedEngineLog ParseGenericManualLog(

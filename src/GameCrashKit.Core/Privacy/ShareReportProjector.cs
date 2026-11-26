@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO;
+using System.Text.RegularExpressions;
 using GameCrashKit.Core.Correlation;
 using GameCrashKit.Core.Models;
 
@@ -8,8 +9,10 @@ namespace GameCrashKit.Core.Privacy;
 /// <summary>
 /// Projects a <see cref="DiagnosisReport"/> into an immutable, strictly whitelisted <see cref="ShareReportModel"/>.
 /// </summary>
-public static class ShareReportProjector
+public static partial class ShareReportProjector
 {
+    [GeneratedRegex(@"(?<ver>\d+\.\d+(?:\.\d+)?(?:[fpab]\d+)?)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, 150)]
+    private static partial Regex SafeNumericVersionRegex();
     public static ShareReportModel Project(
         DiagnosisReport report,
         ShareOptions options,
@@ -161,14 +164,26 @@ public static class ShareReportProjector
             return [];
         }
 
-        var lines = new List<string>
+        var safeVersion = ExtractShareSafeNumericVersion(log.EngineVersion);
+        var safeRhi = NormalizeShareSafeRhi(log.RhiBackend);
+        var fatalityLabel = log.Fatality switch
         {
-            $"日志类型: {log.Kind}" + (string.IsNullOrWhiteSpace(log.EngineVersion) ? string.Empty : $" | 引擎版本: {log.EngineVersion.Trim()}")
+            LogFatalityKind.Fatal => "致命错误/崩溃",
+            LogFatalityKind.NonFatalEnsure => "非致命 Ensure（未证实崩溃）",
+            _ => "未标明"
         };
 
-        if (!string.IsNullOrWhiteSpace(log.RhiBackend))
+        var header = $"日志类型: {log.Kind} | 致命性: {fatalityLabel}";
+        if (safeVersion is not null)
         {
-            lines.Add($"图形渲染后端 (RHI): {log.RhiBackend.Trim()}");
+            header += $" | 规范版本号: {safeVersion}";
+        }
+
+        var lines = new List<string> { header };
+
+        if (safeRhi is not null)
+        {
+            lines.Add($"图形渲染后端 (RHI): {safeRhi}");
         }
 
         if (log.HasGpuDeviceLostSignal)
@@ -189,12 +204,54 @@ public static class ShareReportProjector
         if (log.IsTruncated || log.MayBeOverwritten)
         {
             var flags = new List<string>();
-            if (log.IsTruncated) flags.Add("超过 2 MiB 仅解析文件末尾");
+            if (log.IsTruncated) flags.Add("仅检查尾段 2 MiB");
             if (log.MayBeOverwritten) flags.Add("文件可能受后续重开覆盖");
             lines.Add($"日志读取状态提示: {string.Join("；", flags)}");
         }
 
         return lines;
+    }
+
+    private static string? ExtractShareSafeNumericVersion(string? rawVersion)
+    {
+        if (string.IsNullOrWhiteSpace(rawVersion))
+        {
+            return null;
+        }
+
+        var m = SafeNumericVersionRegex().Match(rawVersion.Trim());
+        return m.Success ? m.Groups["ver"].Value : null;
+    }
+
+    private static string? NormalizeShareSafeRhi(string? rawRhi)
+    {
+        if (string.IsNullOrWhiteSpace(rawRhi))
+        {
+            return null;
+        }
+
+        var r = rawRhi.Trim();
+        if (r.Contains("Direct3D 12", StringComparison.OrdinalIgnoreCase) || r.Contains("D3D12", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Direct3D 12";
+        }
+
+        if (r.Contains("Direct3D 11", StringComparison.OrdinalIgnoreCase) || r.Contains("D3D11", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Direct3D 11";
+        }
+
+        if (r.Contains("Vulkan", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Vulkan";
+        }
+
+        if (r.Contains("OpenGL", StringComparison.OrdinalIgnoreCase))
+        {
+            return "OpenGL";
+        }
+
+        return null;
     }
 
     private static bool IsSameAppModule(string? moduleName, string? appName)

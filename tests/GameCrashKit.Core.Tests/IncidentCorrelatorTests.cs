@@ -303,7 +303,7 @@ public sealed class IncidentCorrelatorTests
     }
 
     [Fact]
-    public void Correlate_RepeatedIncidents_RetainsEarlierWerEvidenceWhenLatestAnchorUnlinked()
+    public void Correlate_RepeatedIncidents_DoesNotBorrowEarlierWerAsDirectOnLatestAnchor()
     {
         var older1000 = MakeApp1000(101, BaseUtc.AddMinutes(-20), reportId: "11111111-1111-1111-1111-111111111111");
         var olderWer = MakeWer1001(102, BaseUtc.AddMinutes(-20).AddSeconds(2), "APPCRASH", "SampleGame.exe", "11111111-1111-1111-1111-111111111111");
@@ -311,9 +311,10 @@ public sealed class IncidentCorrelatorTests
 
         var result = IncidentCorrelator.Correlate(DefaultRequest(), [older1000, olderWer, newer1000]);
 
-        var inc = Assert.Single(result.Candidates);
+        var inc = Assert.Single(result.Candidates, static c => c.AnchorKind == IncidentAnchorKind.ApplicationCrash);
         Assert.Equal(2, inc.OccurrenceCountInWindow);
-        Assert.Equal(AttributionStrength.Direct, inc.WerLinkAttribution);
-        Assert.NotNull(inc.LinkedWerEvidence);
+        Assert.Equal(AttributionStrength.Unlinked, inc.WerLinkAttribution);
+        Assert.Null(inc.LinkedWerEvidence);
+        Assert.Contains(inc.AmbiguityNotes, static n => n.Contains("此前发生中另有 WER 报告记录"));
     }
 }

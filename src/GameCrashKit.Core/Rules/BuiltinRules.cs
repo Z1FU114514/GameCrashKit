@@ -303,7 +303,7 @@ public static class BuiltinRules
     public sealed class EngineOomRule : IDiagnosisRule
     {
         public string RuleId => "ENGINE-OOM";
-        public string RuleVersion => "1";
+        public string RuleVersion => "2";
         public int SpecificityRank => 75;
 
         public DiagnosisFinding? Evaluate(RuleEvaluationContext context)
@@ -314,7 +314,8 @@ public static class BuiltinRules
                 return null;
             }
 
-            var logOom = inc.ConfirmedEngineLog is { HasOutOfMemorySignal: true };
+            var log = inc.ConfirmedEngineLog;
+            var logOom = log is { HasOutOfMemorySignal: true };
             var codeOom = inc.AnchorKind == IncidentAnchorKind.ApplicationCrash &&
                           string.Equals(inc.ExceptionCode, "0xe0000008", StringComparison.OrdinalIgnoreCase);
 
@@ -331,7 +332,7 @@ public static class BuiltinRules
 
             if (logOom)
             {
-                evidenceIds.Add($"engine-log:{inc.ConfirmedEngineLog!.Kind}");
+                evidenceIds.Add($"engine-log:{log!.Kind}");
             }
 
             if (!logOom)
@@ -353,27 +354,71 @@ public static class BuiltinRules
                     SpecificityRank: SpecificityRank);
             }
 
-            var attribution = !codeOom ? AttributionStrength.UserSelected : AttributionStrength.Direct;
-            var strength = inc.ConfirmedEngineLog!.IsTruncated && !codeOom
-                ? EvidenceStrength.LimitedClue
-                : EvidenceStrength.ExplicitRecord;
+            if (log!.Fatality == LogFatalityKind.NonFatalEnsure)
+            {
+                var ensureNotes = new List<string>
+                {
+                    "所选 Unreal 上下文标记为非致命 Ensure，未证实该次记录本身导致进程崩溃。"
+                };
+                if (log.IsTruncated)
+                {
+                    ensureNotes.Add("日志文件超出 2 MiB 读取上限，仅解析末尾部分。");
+                }
+
+                return new DiagnosisFinding(
+                    RuleId: RuleId,
+                    RuleVersion: RuleVersion,
+                    Title: $"手选日志记录非致命 Ensure（含分配失败标记：{log.OomToken ?? "OOM"}）",
+                    Statement: "已确认的日志包含非致命 Ensure 上下文及内存/显存分配失败文字，目前不足以断定进程直接崩溃或硬件/系统虚拟内存故障。",
+                    Attribution: AttributionStrength.UserSelected,
+                    EvidenceStrength: EvidenceStrength.LimitedClue,
+                    EvidenceIds: evidenceIds,
+                    AmbiguityNotes: ensureNotes,
+                    NextActionTemplateId: "CHECK_NONFATAL_ENSURE",
+                    NextActionText: "请核对闪退时间是否真的与该条 Ensure 吻合；当前为非致命告警上下文，建议先勿调整页面文件或系统配置。",
+                    OfficialReferenceLabel: null,
+                    OfficialReferenceUrl: null,
+                    SpecificityRank: SpecificityRank);
+            }
+
+            var ambiguity = new List<string>();
+            if (log.IsTruncated)
+            {
+                ambiguity.Add("日志文件超出 2 MiB 读取上限，仅解析末尾部分。");
+            }
+
+            if (log.MayBeOverwritten)
+            {
+                ambiguity.Add("引擎日志可能被后续重开游戏覆盖，已按当前手选/确认文件记录归属。");
+            }
+
+            var attribution = codeOom ? AttributionStrength.Direct : AttributionStrength.UserSelected;
+            var strength = log.IsTruncated ? EvidenceStrength.LimitedClue : EvidenceStrength.ExplicitRecord;
 
             var pageFile = context.Environment?.PageFile;
-            var pageFileHint = pageFile is { Checked: true, IsDisabled: true }
-                ? "检测到本机虚拟内存（页面文件）已关闭，建议恢复系统托管页面文件后复测。"
-                : pageFile is { Checked: true, TotalAllocatedMb: < 4096 }
-                    ? $"检测到本机当前已分配页面文件总量较小（{pageFile.TotalAllocatedMb} MB），建议结合画质与纹理选项一并排查。"
-                    : "建议降低纹理分辨率或关闭高显存占用特性后复测，并留意后台高内存占用程序。";
+            var allowPageFileHint = !log.IsTruncated &&
+                pageFile is { Checked: true } &&
+                (pageFile.IsDisabled || pageFile.TotalAllocatedMb < 4096);
+
+            var pageFileHint = allowPageFileHint
+                ? pageFile!.IsDisabled
+                    ? "检测到本机当前未见活跃虚拟内存配置，若在完整崩溃中稳定复现，可核查系统托管页面文件设置。"
+                    : $"检测到本机当前已分配页面文件总量较小（{pageFile.TotalAllocatedMb} MB），建议结合游戏画质/纹理选项排查。"
+                : "建议先降低高显存纹理与画质选项对比复测，并关闭后台高内存占用程序。";
+
+            var statement = codeOom
+                ? $"事件记录异常码 0xe0000008，同时手选日志记录到内存/显存分配失败标记（{log.OomToken ?? "OOM"}）。"
+                : $"已确认的引擎日志记录到内存/显存分配失败信号（{log.OomToken ?? "OOM"}）。";
 
             return new DiagnosisFinding(
                 RuleId: RuleId,
                 RuleVersion: RuleVersion,
                 Title: "记录到内存或显存资源耗尽信号",
-                Statement: $"已确认的引擎日志记录到内存/显存分配失败信号（{inc.ConfirmedEngineLog!.OomToken ?? "OOM"}）。",
+                Statement: statement,
                 Attribution: attribution,
                 EvidenceStrength: strength,
                 EvidenceIds: evidenceIds,
-                AmbiguityNotes: [],
+                AmbiguityNotes: ambiguity,
                 NextActionTemplateId: "CHECK_OOM_AND_PAGEFILE",
                 NextActionText: pageFileHint,
                 OfficialReferenceLabel: null,

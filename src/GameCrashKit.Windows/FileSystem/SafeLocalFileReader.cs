@@ -9,6 +9,7 @@ public enum SafeFileReadErrorKind
 {
     None = 0,
     InvalidPath,
+    UnsupportedFileType,
     NetworkOrDevicePathRejected,
     NonFixedDriveRejected,
     ReparsePointRejected,
@@ -79,6 +80,14 @@ public static class SafeLocalFileReader
             return Fail(SafeFileReadErrorKind.InvalidPath, $"路径无效：{ex.Message}");
         }
 
+        var ext = Path.GetExtension(fullPath);
+        if (string.Equals(ext, ".dmp", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(ext, ".mdmp", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(ext, ".hdmp", StringComparison.OrdinalIgnoreCase))
+        {
+            return Fail(SafeFileReadErrorKind.UnsupportedFileType, "按纯只读轻量化原则不支持读取 .dmp 内存转储文件，请选择文本日志（.log / .txt / .xml / .runtime-xml）。");
+        }
+
         var root = Path.GetPathRoot(fullPath);
         if (string.IsNullOrWhiteSpace(root) || root.StartsWith(@"\\", StringComparison.Ordinal))
         {
@@ -98,15 +107,15 @@ public static class SafeLocalFileReader
             return Fail(SafeFileReadErrorKind.InvalidPath, $"无法识别目标磁盘：{ex.Message}");
         }
 
-        if (!File.Exists(fullPath))
-        {
-            return Fail(SafeFileReadErrorKind.FileNotFound, "目标文件不存在。");
-        }
-
-        // Check every directory segment below the drive root AND the file itself for reparse points (symlink/junction).
+        // Check ancestor directories and target BEFORE File.Exists(fullPath) so a local junction pointing to a remote share is never touched first.
         if (HasAnyReparsePointInPath(root, fullPath, out var reparseErrorKind, out var reparseMsg))
         {
             return Fail(reparseErrorKind, reparseMsg!);
+        }
+
+        if (!File.Exists(fullPath))
+        {
+            return Fail(SafeFileReadErrorKind.FileNotFound, "目标文件不存在。");
         }
 
         string? normalizedRequiredRoot = null;
@@ -376,6 +385,12 @@ public static class SafeLocalFileReader
             for (var i = 0; i < parts.Length; i++)
             {
                 current = Path.Combine(current, parts[i]);
+                var isLeaf = i == parts.Length - 1;
+                if (isLeaf ? !File.Exists(current) && !Directory.Exists(current) : !Directory.Exists(current))
+                {
+                    break;
+                }
+
                 var attrs = File.GetAttributes(current);
                 if ((attrs & FileAttributes.ReparsePoint) != 0)
                 {
@@ -385,6 +400,14 @@ public static class SafeLocalFileReader
                 }
             }
 
+            return false;
+        }
+        catch (FileNotFoundException)
+        {
+            return false;
+        }
+        catch (DirectoryNotFoundException)
+        {
             return false;
         }
         catch (UnauthorizedAccessException ex)
@@ -400,6 +423,65 @@ public static class SafeLocalFileReader
             return true;
         }
     }
+
+    public static bool AreSameLocalFile(string pathA, string pathB)
+    {
+        if (string.IsNullOrWhiteSpace(pathA) || string.IsNullOrWhiteSpace(pathB))
+        {
+            return false;
+        }
+
+        try
+        {
+            var fullA = Path.GetFullPath(pathA.Trim());
+            var fullB = Path.GetFullPath(pathB.Trim());
+            if (string.Equals(fullA, fullB, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (!File.Exists(fullA) || !File.Exists(fullB))
+            {
+                return false;
+            }
+
+            using var handleA = File.OpenHandle(fullA, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var handleB = File.OpenHandle(fullB, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            if (!GetFileInformationByHandle(handleA, out var infoA) ||
+                !GetFileInformationByHandle(handleB, out var infoB))
+            {
+                return false;
+            }
+
+            return infoA.VolumeSerialNumber == infoB.VolumeSerialNumber &&
+                   infoA.FileIndexHigh == infoB.FileIndexHigh &&
+                   infoA.FileIndexLow == infoB.FileIndexLow;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ByHandleFileInformation
+    {
+        public uint FileAttributes;
+        public System.Runtime.InteropServices.ComTypes.FILETIME CreationTime;
+        public System.Runtime.InteropServices.ComTypes.FILETIME LastAccessTime;
+        public System.Runtime.InteropServices.ComTypes.FILETIME LastWriteTime;
+        public uint VolumeSerialNumber;
+        public uint FileSizeHigh;
+        public uint FileSizeLow;
+        public uint NumberOfLinks;
+        public uint FileIndexHigh;
+        public uint FileIndexLow;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetFileInformationByHandle(
+        SafeFileHandle hFile,
+        out ByHandleFileInformation lpFileInformation);
 
     private static string? GetFinalPathFromHandle(SafeFileHandle handle)
     {

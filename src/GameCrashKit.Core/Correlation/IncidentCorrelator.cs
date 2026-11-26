@@ -379,21 +379,27 @@ public static class IncidentCorrelator
                 .Select(static i => i.OccurredAtUtc!.Value)
                 .ToList();
 
-            var bestWer = representative.LinkedWerEvidence is not null
-                ? representative
-                : ordered.FirstOrDefault(static i => i.LinkedWerEvidence is not null);
-
             var mergedNotes = ordered
                 .SelectMany(static i => i.AmbiguityNotes)
                 .Distinct(StringComparer.Ordinal)
                 .ToList();
 
+            if (representative.LinkedWerEvidence is null)
+            {
+                var earlierWithWer = ordered.Skip(1).FirstOrDefault(static i => i.LinkedWerEvidence is not null);
+                if (earlierWithWer is not null)
+                {
+                    var werTs = earlierWithWer.OccurredAtUtc.HasValue
+                        ? earlierWithWer.OccurredAtUtc.Value.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) + " UTC"
+                        : "未知时刻";
+                    mergedNotes.Add($"本组此前发生中另有 WER 报告记录（{werTs}），当前最新代表事故本身未直接关联到 WER。");
+                }
+            }
+
             result.Add(representative with
             {
                 OccurrenceCountInWindow = ordered.Count,
                 OccurrenceTimestampsUtc = timestamps,
-                LinkedWerEvidence = bestWer?.LinkedWerEvidence ?? representative.LinkedWerEvidence,
-                WerLinkAttribution = bestWer?.WerLinkAttribution ?? representative.WerLinkAttribution,
                 AmbiguityNotes = mergedNotes
             });
         }

@@ -223,4 +223,29 @@ public sealed class PrivacyAndShareExporterTests
         Assert.DoesNotContain("10:27:45", md1);
         Assert.Equal(md1, md2);
     }
+
+    [Fact]
+    public void OptInSignalSummary_StripsPrivateEngineBranchAndCustomRhiStrings()
+    {
+        var (report, context) = BuildHostileReport();
+        var privateLog = report.SelectedIncident!.ConfirmedEngineLog! with
+        {
+            EngineVersion = "5.4.4-0+++UE5+PrivateStudioBranch",
+            RhiBackend = "CustomInternalRHI (StudioSecret)"
+        };
+        var privateInc = report.SelectedIncident! with { ConfirmedEngineLog = privateLog };
+        var privateReport = report with { SelectedIncident = privateInc };
+
+        var share = ShareReportProjector.Project(
+            privateReport,
+            new ShareOptions(HideAppName: true, HideExactTimestamp: true, IncludeScrubbedErrorExcerpt: true),
+            context,
+            TimeZoneInfo.Utc);
+        var md = MarkdownReportExporter.Render(share);
+
+        Assert.Contains("5.4.4", md);
+        Assert.DoesNotContain("PrivateStudioBranch", md, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("CustomInternalRHI", md, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("StudioSecret", md, StringComparison.OrdinalIgnoreCase);
+    }
 }

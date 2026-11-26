@@ -324,4 +324,73 @@ public sealed class DiagnosisRuleEngineTests
         Assert.NotNull(report.AdditionalHints);
         Assert.Contains(report.AdditionalHints!, static h => h.RuleId == "THIRD-PARTY-MODULE-HINT");
     }
+
+    [Fact]
+    public void Evaluate_Exception0xe0000008WithTruncatedOomLog_RemainsLimitedClueWithTruncationNoteAndNoPageFileAdvice()
+    {
+        var engine = new DiagnosisRuleEngine();
+        var truncatedLog = new UserConfirmedEngineLog(
+            EngineLogKind.GenericManual,
+            "app.log",
+            "app.log",
+            NowUtc,
+            IsTruncated: true,
+            MayBeOverwritten: false,
+            EngineVersion: null,
+            RhiBackend: null,
+            HasGpuDeviceLostSignal: false,
+            GpuLostToken: null,
+            HasOutOfMemorySignal: true,
+            OomToken: "Out of video memory",
+            RawErrorExcerptLines: ["Out of video memory"],
+            Fatality: LogFatalityKind.Unknown);
+
+        var env = new EnvironmentSnapshot(
+            NowUtc,
+            [],
+            new TargetPathFact(false, false, false, null, null),
+            new OneDriveDocsFact(true, false, false, EnvironmentNoticeLevel.Info, "ok"),
+            new VcRuntimeFact(true, "14.51", true, "14.51", EnvironmentNoticeLevel.Info),
+            new PageFileFact(true, true, 0, 0, false, EnvironmentNoticeLevel.Attention, "disabled"),
+            new RunningOverlaysFact(true, [], "note"),
+            new SystemLocaleAndSecurityFact("Windows 11", 26200, 16384, 936, false, true),
+            []);
+
+        var inc = MakeIncident(exceptionCode: "0xe0000008", engineLog: truncatedLog);
+        var report = engine.Evaluate(new RuleEvaluationContext(DefaultReq, inc, [], [], env), [inc.PrimaryEvidence]);
+
+        var oom = Assert.Single(report.PrimaryFindings, static f => f.RuleId == "ENGINE-OOM");
+        Assert.Equal(EvidenceStrength.LimitedClue, oom.EvidenceStrength);
+        Assert.Contains(oom.AmbiguityNotes, static n => n.Contains("2 MiB"));
+        Assert.DoesNotContain("页面文件", oom.NextActionText);
+    }
+
+    [Fact]
+    public void Evaluate_NonFatalEnsureWithOom_StaysLimitedClueWithNoPageFilePrescription()
+    {
+        var engine = new DiagnosisRuleEngine();
+        var ensureLog = new UserConfirmedEngineLog(
+            EngineLogKind.Unreal,
+            "CrashContext.runtime-xml",
+            "CrashContext.runtime-xml",
+            NowUtc,
+            IsTruncated: false,
+            MayBeOverwritten: false,
+            EngineVersion: "5.4.4",
+            RhiBackend: "D3D12",
+            HasGpuDeviceLostSignal: false,
+            GpuLostToken: null,
+            HasOutOfMemorySignal: true,
+            OomToken: "Out of video memory",
+            RawErrorExcerptLines: ["Out of video memory"],
+            Fatality: LogFatalityKind.NonFatalEnsure);
+
+        var inc = MakeIncident(engineLog: ensureLog);
+        var report = engine.Evaluate(new RuleEvaluationContext(DefaultReq, inc, [], [], null), [inc.PrimaryEvidence]);
+
+        var oom = Assert.Single(report.PrimaryFindings, static f => f.RuleId == "ENGINE-OOM");
+        Assert.Equal(EvidenceStrength.LimitedClue, oom.EvidenceStrength);
+        Assert.Contains("Ensure", oom.Title);
+        Assert.Contains("勿调整页面文件", oom.NextActionText);
+    }
 }

@@ -155,14 +155,46 @@ public sealed class SafeLocalFileReaderTests
         Assert.Equal(SafeFileReadErrorKind.NetworkOrDevicePathRejected, result.ErrorKind);
     }
 
+    [Theory]
+    [InlineData(@"C:\Temp\crash.dmp")]
+    [InlineData(@"D:\Dumps\game.mdmp")]
+    public void ReadTailUtf8_DumpFiles_AreRejectedImmediately(string dumpPath)
+    {
+        var result = SafeLocalFileReader.ReadTailUtf8(dumpPath);
+
+        Assert.False(result.Success);
+        Assert.Equal(SafeFileReadErrorKind.UnsupportedFileType, result.ErrorKind);
+    }
+
     [Fact]
-    public void ReadTailUtf8_RealNtfsDirectoryJunction_RejectsReparsePoint()
+    public void LoadAndParseUserSelectedFile_EmptyRuntimeXml_FailsCleanlyWithoutThrowing()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("gck_empty_xml_");
+        try
+        {
+            var xmlPath = Path.Combine(tempDir.FullName, "CrashContext.runtime-xml");
+            File.WriteAllText(xmlPath, "   \r\n  ");
+
+            var result = EngineLogDiscovery.LoadAndParseUserSelectedFile(xmlPath);
+
+            Assert.False(result.Success);
+            Assert.Contains("为空", result.ErrorMessage);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ReadTailUtf8_RealNtfsDirectoryJunction_RejectsReparseBeforeFileExistsAndHardLinkIdentityMatches()
     {
         var tempRoot = Directory.CreateTempSubdirectory("gck_junction_");
         var targetDir = Path.Combine(tempRoot.FullName, "target");
         var junctionDir = Path.Combine(tempRoot.FullName, "junction_link");
         Directory.CreateDirectory(targetDir);
         var logFile = Path.Combine(targetDir, "Player.log");
+        var hardLinkFile = Path.Combine(targetDir, "Player_hardlink.txt");
         File.WriteAllText(logFile, "Initialize engine version: 2022.3.20f1c1\n");
 
         try
@@ -179,11 +211,29 @@ public sealed class SafeLocalFileReaderTests
             proc.WaitForExit(5_000);
             Assert.Equal(0, proc.ExitCode);
 
-            var pathThroughJunction = Path.Combine(junctionDir, "Player.log");
-            var result = SafeLocalFileReader.ReadTailUtf8(pathThroughJunction);
+            var hlPsi = new ProcessStartInfo("cmd.exe", $"/c mklink /H \"{hardLinkFile}\" \"{logFile}\"")
+            {
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            using var hlProc = Process.Start(hlPsi)!;
+            hlProc.WaitForExit(5_000);
+            Assert.Equal(0, hlProc.ExitCode);
 
-            Assert.False(result.Success);
-            Assert.Equal(SafeFileReadErrorKind.ReparsePointRejected, result.ErrorKind);
+            // Both existing and missing leaf paths under a junction MUST be rejected as ReparsePointRejected (not FileNotFound).
+            var pathThroughJunction = Path.Combine(junctionDir, "Player.log");
+            var missingUnderJunction = Path.Combine(junctionDir, "NonExistent.log");
+            var r1 = SafeLocalFileReader.ReadTailUtf8(pathThroughJunction);
+            var r2 = SafeLocalFileReader.ReadTailUtf8(missingUnderJunction);
+
+            Assert.False(r1.Success);
+            Assert.Equal(SafeFileReadErrorKind.ReparsePointRejected, r1.ErrorKind);
+            Assert.False(r2.Success);
+            Assert.Equal(SafeFileReadErrorKind.ReparsePointRejected, r2.ErrorKind);
+
+            Assert.True(SafeLocalFileReader.AreSameLocalFile(logFile, hardLinkFile));
         }
         finally
         {

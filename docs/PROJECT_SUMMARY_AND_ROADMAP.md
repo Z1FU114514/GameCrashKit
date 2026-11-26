@@ -70,9 +70,9 @@
 | `Check5.LatencyBenchmark20Runs` | **PASS** | 沙盒连续 20 次扫描：`Min=28.2ms` / `Avg=31.6ms` / `P95=35.8ms` / `Max=38.6ms` |
 | `Check6.PortableGuiSmokeLaunch` | **PASS** | 免 UAC 启动绿色便携版 GUI（主窗口句柄就绪耗时 `4ms`） |
 
-### 4.3 最终 `v0.1.0-alpha.1` 便携发行包校验信息
-- 便携归档包：`publish/GameCrashKit-v0.1.0-alpha.1-win-x64.zip`（`62.45 MB`）
-- SHA-256：`40aedcb8a443e0714e06b7ea6c4fab1985a2bf169d852b8800bceeadba134e94`
+### 4.3 本地沙盒验证 ZIP（`0a37e60` 本地构建，非 GitHub 云端资产）
+- 本地沙盒归档包：`publish/GameCrashKit-v0.1.0-alpha.1-win-x64.zip`（`62.45 MB`）
+- 本地构建 SHA-256：`40aedcb8a443e0714e06b7ea6c4fab1985a2bf169d852b8800bceeadba134e94`（GitHub Releases 云端 CI 产出的 ZIP 因其自身构建时间戳而对应云端 `SHA256SUMS.txt`，公开下载请始终以 Releases 页附带的 `.SHA256SUMS.txt` 为准）
 
 ---
 

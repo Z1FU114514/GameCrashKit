@@ -142,7 +142,7 @@ public static class EngineLogDiscovery
                 EngineLog: parsed,
                 FileReadResult: readResult);
         }
-        catch (Exception ex) when (ex is XmlException or FormatException)
+        catch (Exception ex) when (ex is XmlException or FormatException or ArgumentException)
         {
             return new EngineLogLoadResult(
                 Success: false,
