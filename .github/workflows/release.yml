@@ -9,7 +9,7 @@ on:
       version_label:
         description: 'Release version label (e.g. v0.1.0-alpha.1 or v0.1.0)'
         required: true
-        default: 'v0.2.0-alpha.1'
+        default: 'v0.2.0-alpha.2'
 
 permissions:
   contents: write

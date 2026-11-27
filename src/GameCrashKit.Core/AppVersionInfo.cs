@@ -7,7 +7,7 @@ namespace GameCrashKit.Core;
 /// </summary>
 public static class AppVersionInfo
 {
-    public const string FallbackVersion = "0.2.0-alpha.1";
+    public const string FallbackVersion = "0.2.0-alpha.2";
 
     public static string Current { get; } = ResolveVersion();
 

@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$VersionLabel = "v0.2.0-alpha.1",
+    [string]$VersionLabel = "v0.2.0-alpha.2",
     [switch]$StageLocalZipFallback,
     [string]$SourceZipPath = "",
     [string]$SourceChecksumPath = ""

@@ -1,5 +1,13 @@
 # 更新日志 (Changelog)
 
+## [v0.2.0-alpha.2] - 2026-11-27
+
+跨软件静态适配器扩展、首轮真实格式样本自测与首发可信度治理更新：
+* **跨软件静态文本适配器与真实报错词表**：新增纯 C# 静态适配器识别 **OBS Studio**（`(887A0005)` / `Device Remove/Reset!`、RHI `Direct3D 11`）、**Blender 4.2**（`EXCEPTION_ACCESS_VIOLATION` / Cycles `CUDA error: Out of memory`，并剥离 `# backtrace` 与 `# Python backtrace` 私有路径）与 **ComfyUI Desktop**（`torch.OutOfMemoryError: CUDA out of memory` 与 Python 进程 `3221225477` 退出码精确映射为 `LogSignalId.AccessViolation` 而非 OOM）；直接复用 `ENGINE-GPU-LOST@2` 与 `ENGINE-OOM@2`，零 UI / 规则重写（[跨软件评估报告](CROSS_APP_EVALUATION_ROUND1.md)）。
+* **首发可信度与 SmartScreen 实测工具链**：新增可在 Win10/Win11 非管理员账户复用的下载/MotW/解压对比探测脚本（`scripts/Test-FirstRunTrust.ps1` 与 `scripts/New-FirstRunTrustSandboxKit.ps1`），并形成 [首次运行可信度与签名指南](FIRST_RUN_TRUST_AND_SIGNING.md)，补充资源管理器解锁方法与 SignPath Foundation 开源签名准入清单。
+* **开源安全与贡献治理**：新增根目录 `SECURITY.md` 与 `CONTRIBUTING.md`，固化双许可、`asInvoker`、零网络与反作弊零侵入红线。
+* **全量回归与离线沙盒验收**：单元测试与 WPF 端到端矩阵扩展至 **109 / 109 通过**，断网无 `.NET 10` Windows Sandbox 跑通 **11 / 11** 全自动验收。
+
 ## [v0.2.0-alpha.1] - 2026-11-27
 
 通用信号底座最小演进、仅手选日志独立报告与单次分享信息完备性版本：

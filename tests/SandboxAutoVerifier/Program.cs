@@ -104,7 +104,7 @@ internal static class Program
         string? appDir = null;
         string? sampleLog = null;
         string? outputDir = null;
-        var expectedVersion = "0.2.0-alpha.1";
+        var expectedVersion = "0.2.0-alpha.2";
 
         for (var i = 0; i < args.Length; i++)
         {

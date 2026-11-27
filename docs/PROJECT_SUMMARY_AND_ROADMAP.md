@@ -1,6 +1,6 @@
 # GameCrash Kit 项目阶段总结与后续规划（v0.1 → v0.3+）
 
-> 文档更新时间：2026-11-27 · 目标版本：`v0.2.0-alpha.1`
+> 文档更新时间：2026-11-27 · 目标版本：`v0.2.0-alpha.2`
 
 ---
 
@@ -30,7 +30,8 @@
 | **M4 发布与 `v0.1.0-alpha.1`** | `e5df744` ~ `0a37e60` | 静态安全审计测试、CI/Release Workflows、第 1 轮 P0/P1 红队整改（`fba6384`）、离线沙盒 10/10 验收与首个公开 Release |
 | **第 2 轮加固与 `v0.1.0-alpha.2`** | `60f6883` | `EngineVersion`/RHI 严白名单、先查重解析点且直拒 `.dmp`、重复事故不借用旧 WER、Ensure 与 OOM 截断收敛、Win32 句柄唯一标识防覆盖，干净检出 88/88 |
 | **`v0.2-alpha` 第一刀：仅日志独立报告** | `64c578b` | 通用固定信号底座（`LogSignalId` + 三态 `ReportSubjectKind`）、冷启动手选日志独立出卡、`LOG-ONLY-SUMMARY@1`、独立/关联切换与 5 行离线验收矩阵（93/93） |
-| **`v0.2.0-alpha.1` 单次分享完备性** | 当前基线 | 新增相对「扫描范围」与纯枚举「采集受限与数据边界说明」（Markdown + PNG 同步），全量 97/97 与离线 Windows Sandbox 11/11 复验通过 |
+| **`v0.2.0-alpha.1` 单次分享完备性** | `6c7160d` | 新增相对「扫描范围」与纯枚举「采集受限与数据边界说明」（Markdown + PNG 同步），全量 97/97 与离线 Windows Sandbox 11/11 复验通过 |
+| **`v0.2.0-alpha.2` 跨软件适配与可信治理** | 当前基线 | 新增 OBS / Blender / ComfyUI 静态适配器与 6 组匿名化夹具、`Test-FirstRunTrust.ps1` SmartScreen 探测及 `SECURITY.md` / `CONTRIBUTING.md`，全量 109/109 与沙盒 11/11 通过 |
 
 ---
 
@@ -49,33 +50,33 @@
 
 ---
 
-## 四、已验证的质量、性能与实测结果（`v0.2.0-alpha.1`）
+## 四、已验证的质量、性能与实测结果（`v0.2.0-alpha.2`）
 
 ### 4.1 宿主机与纯净 `git archive` 检出回归测试
-- **Release 构建**（`Version=0.2.0-alpha.1`）：**0 警告、0 错误**。
-- **全量回归与纯净 `git archive` 快照测试**：**97 / 97 全部通过**（`Core.Tests` 53 + `Windows.Tests` 31 + `App.Tests` 13，0 失败 0 跳过）。
-- **宿主机 M4 发布门禁**（`Verify-ReleaseGate.ps1`）：清单（`asInvoker`）、包完整性（0 测试工具泄漏）、只读哈希不变性、20 次真实扫描基准全部 `PASS`（`Min=28.1ms | P50=29.1ms | P95=35.4ms | Max=58.2ms`）。
+- **Release 构建**（`Version=0.2.0-alpha.2`）：**0 警告、0 错误**。
+- **全量回归与纯净 `git archive` 快照测试**：**109 / 109 全部通过**（`Core.Tests` 59 + `Windows.Tests` 31 + `App.Tests` 19，0 失败 0 跳过）。
+- **宿主机 M4 发布门禁**（`Verify-ReleaseGate.ps1`）：清单（`asInvoker`）、包完整性（0 测试工具泄漏）、只读哈希不变性、20 次真实扫描基准全部 `PASS`（`Min=27.6ms | P50=30.6ms | P95=38.5ms | Max=54.4ms`）。
 
-### 4.2 离线 Windows Sandbox 无人值守验收（`2026-11-27 09:50:26 +08:00`）
+### 4.2 离线 Windows Sandbox 无人值守验收（`2026-11-27 11:26:19 +08:00`）
 在 **完全断网（`Networking=Disable`）、无 `.NET 10` 预装、非提权 `WDAGUtilityAccount`** 的 Windows 11 24H2（Build `26100.9457`）沙盒中，无人值守套件执行 **11 / 11 项全部 `PASS`**：
 
 | 验收项 | 状态 | 实测指标 |
 | :--- | :--- | :--- |
 | `Check1a.OfflineNoNet10Environment` | **PASS** | `SandboxUser=True`, `Offline=True`（DNS 阻断）, `HostNet10Preinstalled=False` |
-| `Check1b.CleanPortableArtifact` | **PASS** | `ExeExists=True`, `ProductVersion=0.2.0-alpha.1...`, `LeakedTestBinaries=[]` |
+| `Check1b.CleanPortableArtifact` | **PASS** | `ExeExists=True`, `ProductVersion=0.2.0-alpha.2...`, `LeakedTestBinaries=[]` |
 | `Check2.RealCrashCapture` | **PASS** | 实测捕获真实 `SyntheticCrashTool.exe` `Event 1000`（`0xc0000005`） |
 | `Check2b.SampleLogReadOnly` | **PASS** | Unity 日志解析成功（`GpuLost=True`），SHA-256 与修改时间 100% 不变 |
 | `Check3c.StandaloneLogColdStart` | **PASS** | 冷启动独立诊断 `StandaloneLogOnly`，触发 `[ENGINE-GPU-LOST@2, LOG-ONLY-SUMMARY@1]`，Markdown 完备性通过且导出 `900×958` px PNG，`Leaks=[]` |
-| `Check3b.ReportVersionConsistency` | **PASS** | `ReportAppVersion=0.2.0-alpha.1 == Expected=0.2.0-alpha.1` |
+| `Check3b.ReportVersionConsistency` | **PASS** | `ReportAppVersion=0.2.0-alpha.2 == Expected=0.2.0-alpha.2` |
 | `Check3.RuleEngineCoverage` | **PASS** | 关联日志触发 `[ENGINE-GPU-LOST@2, EXCEPTION-AV@1, APP-CRASH@1]` |
-| `Check4a.MarkdownPrivacyScrub` | **PASS** | 导出 3660 字节 Markdown（含 `扫描范围`、`最近 2 小时` 与安全安装来源），`Leaks=[]` |
-| `Check4b.PngEmergencyCard` | **PASS** | 导出 `900×1331` px、`96.0×96.0 DPI`、`153841` 字节 PNG，浅底画布校验通过 |
-| `Check5.LatencyBenchmark20Runs` | **PASS** | 沙盒连续 20 次扫描：`Min=29.0ms` / `Avg=32.7ms` / `P95=35.8ms` / `Max=36.1ms` |
+| `Check4a.MarkdownPrivacyScrub` | **PASS** | 导出 3672 字节 Markdown（含 `扫描范围`、`最近 2 小时` 与安全安装来源），`Leaks=[]` |
+| `Check4b.PngEmergencyCard` | **PASS** | 导出 `900×1331` px、`96.0×96.0 DPI`、`154137` 字节 PNG，浅底画布校验通过 |
+| `Check5.LatencyBenchmark20Runs` | **PASS** | 沙盒连续 20 次扫描：`Min=25.4ms` / `Avg=29.3ms` / `P95=33.1ms` / `Max=33.7ms` |
 | `Check6.PortableGuiSmokeLaunch` | **PASS** | 免 UAC 启动绿色便携版 GUI（主窗口句柄就绪耗时 `1ms`） |
 
 ### 4.3 本地沙盒验证 ZIP（本地构建，非 GitHub 云端资产）
-- 本地沙盒归档包：`publish/GameCrashKit-v0.2.0-alpha.1-win-x64.zip`（`62.47 MB`）
-- 本地沙盒包 SHA-256：`0aa8046671d91c7b497a3af7072fcdd0ac98aed602b0c816620ea42e7999e022`（仅对应本机沙盒构建包；GitHub Releases 云端 CI 产出的 ZIP 因其自身构建环境差异而对应 Releases 页面附带的 `.SHA256SUMS.txt`，公开下载请始终以 Releases 页面 `SHA256SUMS.txt` 为准）
+- 本地沙盒归档包：`publish/GameCrashKit-v0.2.0-alpha.2-win-x64.zip`（`62.47 MB`）
+- 本地沙盒包 SHA-256：`414fa24bd085e9cedaf9cf9a1d561a6b99cd1c0db3ad54bb6089c99d1c18b361`（仅对应本机沙盒构建包；GitHub Releases 云端 CI 产出的 ZIP 因其自身构建环境差异而对应 Releases 页面附带的 `.SHA256SUMS.txt`，公开下载请始终以 Releases 页面 `SHA256SUMS.txt` 为准）
 
 ---
 
