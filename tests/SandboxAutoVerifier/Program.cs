@@ -104,7 +104,7 @@ internal static class Program
         string? appDir = null;
         string? sampleLog = null;
         string? outputDir = null;
-        var expectedVersion = "0.1.0-alpha.1";
+        var expectedVersion = "0.2.0-alpha.1";
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -175,7 +175,10 @@ internal static class Program
 
         var confirmedLog = VerifyReadOnlySampleLog(options.SampleLogPath, recorder);
 
-        // Check 3: Rule engine coverage (ENGINE-GPU-LOST@1, EXCEPTION-AV@1, APP-CRASH@1)
+        // Check 3c: Cold-start standalone log-only diagnosis & completeness export
+        VerifyStandaloneLogColdStart(coordinator, confirmedLog, options.OutputDir, recorder);
+
+        // Check 3: Rule engine coverage (ENGINE-GPU-LOST@2, EXCEPTION-AV@1, APP-CRASH@1)
         DiagnosisReport? reportWithLog = null;
         if (syntheticIncident is not null)
         {
@@ -320,6 +323,78 @@ internal static class Program
         return loadResult.EngineLog;
     }
 
+    private static void VerifyStandaloneLogColdStart(
+        WindowsScanCoordinator coordinator,
+        UserConfirmedEngineLog? confirmedLog,
+        string outputDir,
+        CheckRecorder recorder)
+    {
+        if (confirmedLog is null)
+        {
+            recorder.Record("Check3c.StandaloneLogColdStart", false, "Skipped because sample log failed to load.");
+            return;
+        }
+
+        var standaloneReport = coordinator.BuildDiagnosisReport(
+            session: null,
+            selectedIncident: null,
+            confirmedEngineLog: confirmedLog,
+            forceStandaloneLog: true);
+
+        var fired = standaloneReport.PrimaryFindings
+            .Select(f => $"{f.RuleId}@{f.RuleVersion}")
+            .ToArray();
+        var rulesOk = standaloneReport.SubjectKind == ReportSubjectKind.StandaloneLogOnly &&
+                      fired.Contains("ENGINE-GPU-LOST@2", StringComparer.Ordinal) &&
+                      fired.Contains("LOG-ONLY-SUMMARY@1", StringComparer.Ordinal) &&
+                      !fired.Contains("UNKNOWN@1", StringComparer.Ordinal);
+
+        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var scrubContext = new ScrubContext(
+            CurrentUserName: Environment.UserName,
+            CurrentMachineName: Environment.MachineName,
+            UserProfilePath: userProfile);
+
+        var shareModel = ShareReportProjector.Project(
+            standaloneReport,
+            new ShareOptions(HideAppName: true, HideExactTimestamp: true, IncludeScrubbedErrorExcerpt: true),
+            scrubContext,
+            TimeZoneInfo.Local);
+
+        var md = MarkdownReportExporter.Render(shareModel);
+        var mdPath = Path.Combine(outputDir, "sandbox-standalone-report.md");
+        File.WriteAllText(mdPath, md, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+
+        var piiViolations = FindPiiLeaks(md, Environment.UserName, Environment.MachineName, userProfile);
+        var mdCompletenessOk =
+            md.Contains("来源：手选日志（独立诊断）", StringComparison.Ordinal) &&
+            md.Contains("扫描范围", StringComparison.Ordinal) &&
+            md.Contains("未扫描", StringComparison.Ordinal) &&
+            md.Contains("采集受限与数据边界说明", StringComparison.Ordinal) &&
+            piiViolations.Count == 0;
+
+        EnsureWpfThemeResourcesLoaded();
+        var pngResult = EmergencyCardPngRenderer.RenderToPngBytes(shareModel);
+        var pngPath = Path.Combine(outputDir, "sandbox-standalone-card.png");
+        File.WriteAllBytes(pngPath, pngResult.PngBytes);
+
+        var decoded = EmergencyCardPngRenderer.CreateFrozenBitmapImage(pngResult.PngBytes);
+        var dpiOk = Math.Abs(decoded.DpiX - EmergencyCardPngRenderer.TargetDpi) < 0.1 &&
+                    Math.Abs(decoded.DpiY - EmergencyCardPngRenderer.TargetDpi) < 0.1;
+        var bodySampleY = Math.Clamp(200, 10, Math.Max(10, decoded.PixelHeight - 10));
+        var isLightCanvas = SamplePixelIsLightCanvas(decoded, 10, bodySampleY, out _);
+        var pngOk = HasPngSignature(pngResult.PngBytes) &&
+                    pngResult.PixelWidth == EmergencyCardPngRenderer.CardWidth &&
+                    pngResult.PixelHeight > 0 &&
+                    dpiOk &&
+                    isLightCanvas;
+
+        recorder.Record(
+            "Check3c.StandaloneLogColdStart",
+            rulesOk && mdCompletenessOk && pngOk,
+            $"Subject={standaloneReport.SubjectKind}, Rules=[{string.Join(", ", fired)}], MdOk={mdCompletenessOk}, PngSize={pngResult.PixelWidth}x{pngResult.PixelHeight}, Leaks=[{string.Join(", ", piiViolations)}]");
+    }
+
     private static void VerifyExportsAndPrivacy(DiagnosisReport report, string outputDir, CheckRecorder recorder)
     {
         var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -342,10 +417,12 @@ internal static class Program
         File.WriteAllText(mdPath, markdown, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
 
         var piiViolations = FindPiiLeaks(markdown, Environment.UserName, Environment.MachineName, userProfile);
+        var hasScope = markdown.Contains("扫描范围", StringComparison.Ordinal) &&
+                       markdown.Contains("最近 2 小时", StringComparison.Ordinal);
         recorder.Record(
             "Check4a.MarkdownPrivacyScrub",
-            markdown.Length > 100 && piiViolations.Count == 0,
-            $"Path={mdPath}, Bytes={Encoding.UTF8.GetByteCount(markdown)}, Leaks=[{string.Join(", ", piiViolations)}]");
+            markdown.Length > 100 && piiViolations.Count == 0 && hasScope,
+            $"Path={mdPath}, Bytes={Encoding.UTF8.GetByteCount(markdown)}, HasScanScope={hasScope}, Leaks=[{string.Join(", ", piiViolations)}]");
 
         EnsureWpfThemeResourcesLoaded();
         var pngResult = EmergencyCardPngRenderer.RenderToPngBytes(shareModel);

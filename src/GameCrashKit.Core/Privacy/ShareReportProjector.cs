@@ -113,8 +113,19 @@ public static partial class ShareReportProjector
         var envFacts = ProjectEnvironmentFacts(report.Environment, scrubContext);
 
         var coverageLines = report.Coverage
-            .Select(c => $"{c.SourceName}: {c.Status}（读取 {c.RecordsRead} 条{(c.Truncated ? "，已截断" : string.Empty)}）")
+            .Select(c =>
+            {
+                var sourceName = PrivacyScrubber.ScrubText(c.SourceName, scrubContext, scrubIpv4: true);
+                var statusText = ToCoverageStatusText(c.Status);
+                var extraTruncated = c.Truncated && c.Status != SourceCoverageStatus.Truncated
+                    ? "，已截断"
+                    : string.Empty;
+                return $"{sourceName}: {statusText}（读取 {c.RecordsRead} 条{extraTruncated}）";
+            })
             .ToList();
+
+        var scanScopeSummary = BuildScanScopeSummary(report, isStandaloneLog);
+        var limitationNotes = BuildSourceLimitationNotes(report, activeLog, isStandaloneLog, scrubContext);
 
         var signalTemplates = BuildFixedSignalSummaryLines(activeLog);
         var hasAvailableExcerptSource = signalTemplates.Count > 0;
@@ -151,7 +162,92 @@ public static partial class ShareReportProjector
             HasAvailableExcerptSource: hasAvailableExcerptSource,
             HasOptInExcerpt: hasOptInExcerpt,
             OptInScrubbedExcerptLines: scrubbedExcerpts,
-            AdditionalHints: additionalHints);
+            AdditionalHints: additionalHints,
+            ScanScopeSummary: scanScopeSummary,
+            SourceLimitationNotes: limitationNotes);
+    }
+
+    private static string BuildScanScopeSummary(DiagnosisReport report, bool isStandaloneLog)
+    {
+        if (report.Coverage.Count == 0)
+        {
+            return isStandaloneLog
+                ? "Windows 事件：未扫描（仅手选日志独立诊断）"
+                : "Windows 事件：未扫描";
+        }
+
+        var duration = report.ScanRequest.WindowEndUtc - report.ScanRequest.WindowStartUtc;
+        var windowLabel = duration.TotalHours <= 2.5
+            ? "最近 2 小时"
+            : duration.TotalHours <= 25.0
+                ? "最近 24 小时"
+                : duration.TotalDays <= 7.5
+                    ? "最近 7 天"
+                    : $"{Math.Max(1, (int)Math.Round(duration.TotalHours))} 小时";
+
+        var filterLabel = report.ScanRequest.IncludeAllApplications ? "全部应用事件" : "游戏优先视图";
+        var capSuffix = report.ScanRequest.MaxEventsPerChannel > 0
+            ? $"，每频道上限 {report.ScanRequest.MaxEventsPerChannel} 条"
+            : string.Empty;
+
+        var scopeText = $"Windows 扫描窗：{windowLabel}（{filterLabel}{capSuffix}）";
+        return isStandaloneLog ? $"{scopeText} ｜ 当前视图：独立日志诊断" : scopeText;
+    }
+
+    private static string ToCoverageStatusText(SourceCoverageStatus status) => status switch
+    {
+        SourceCoverageStatus.Ok => "正常",
+        SourceCoverageStatus.Truncated => "已截断（达到每频道上限）",
+        SourceCoverageStatus.PartialTimeout => "超时降级（超过 10 秒软超时）",
+        SourceCoverageStatus.AccessDenied => "权限受限（标准权限不可读）",
+        SourceCoverageStatus.NotFound => "频道不存在",
+        SourceCoverageStatus.Cancelled => "已取消",
+        SourceCoverageStatus.Skipped => "已跳过",
+        SourceCoverageStatus.Failed => "读取失败",
+        _ => "未知状态"
+    };
+
+    private static IReadOnlyList<string> BuildSourceLimitationNotes(
+        DiagnosisReport report,
+        UserConfirmedEngineLog? activeLog,
+        bool isStandaloneLog,
+        ScrubContext scrubContext)
+    {
+        var notes = new List<string>();
+
+        foreach (var cov in report.Coverage)
+        {
+            if (cov.Status != SourceCoverageStatus.Ok || cov.Truncated)
+            {
+                var safeSource = PrivacyScrubber.ScrubText(cov.SourceName, scrubContext, scrubIpv4: true);
+                var statusText = cov.Status == SourceCoverageStatus.Ok
+                    ? "已截断（达到每频道上限）"
+                    : ToCoverageStatusText(cov.Status);
+                notes.Add($"{safeSource}：{statusText}（结论可能不完整，可调整扫描窗复查）");
+            }
+        }
+
+        if (isStandaloneLog && report.Coverage.Count == 0)
+        {
+            notes.Add("未执行 Windows 事件扫描，报告仅反映手选文件内容，不含系统级进程/故障模块锚点。");
+        }
+
+        if (activeLog is { IsTruncated: true })
+        {
+            notes.Add("手选日志超出 2 MiB 只读上限，仅检查尾段 2 MiB，更早报错未纳入分析。");
+        }
+
+        if (activeLog is { MayBeOverwritten: true })
+        {
+            notes.Add("手选日志修改时间接近或晚于后续运行，可能已被程序重开覆盖。");
+        }
+
+        if (report.Environment is { RunningOverlays.Checked: false })
+        {
+            notes.Add("常见覆盖层瞬时快照探测受限或不可用。");
+        }
+
+        return notes;
     }
 
     private static ShareFindingItem ProjectFinding(

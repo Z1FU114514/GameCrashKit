@@ -248,4 +248,56 @@ public sealed class PrivacyAndShareExporterTests
         Assert.DoesNotContain("CustomInternalRHI", md, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("StudioSecret", md, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Theory]
+    [InlineData(2, false, "最近 2 小时", "游戏优先视图")]
+    [InlineData(24, true, "最近 24 小时", "全部应用事件")]
+    [InlineData(168, false, "最近 7 天", "游戏优先视图")]
+    public void ScanScopeSummary_FormatsRelativeWindowsWithoutClockTimestamps(
+        int hours,
+        bool includeAllApps,
+        string expectedWindowLabel,
+        string expectedFilterLabel)
+    {
+        var (report, context) = BuildHostileReport();
+        var req = new ScanRequest(BaseUtc.AddHours(-hours), BaseUtc, includeAllApps, 1000);
+        var scopedReport = report with { ScanRequest = req };
+
+        var share = ShareReportProjector.Project(
+            scopedReport,
+            new ShareOptions(HideAppName: true, HideExactTimestamp: true, IncludeScrubbedErrorExcerpt: false),
+            context,
+            TimeZoneInfo.Utc);
+        var md = MarkdownReportExporter.Render(share);
+
+        Assert.NotNull(share.ScanScopeSummary);
+        Assert.Contains(expectedWindowLabel, share.ScanScopeSummary);
+        Assert.Contains(expectedFilterLabel, share.ScanScopeSummary);
+        Assert.Contains("扫描范围", md);
+        Assert.DoesNotContain("10:30:45", md);
+        AssertContainsZeroSecrets(md);
+    }
+
+    [Fact]
+    public void DegradedCoverage_ProducesLocalizedLimitationNotesWithoutLeakingRawDetail()
+    {
+        var (report, context) = BuildHostileReport();
+        var degradedCov = new List<SourceCoverage>
+        {
+            new("Application", BaseUtc.AddHours(-2), BaseUtc, 1000, true, SourceCoverageStatus.Truncated, @"Truncated in C:\Users\SecretGamer88 on MY-SECRET-RIG"),
+            new("Security", BaseUtc.AddHours(-2), BaseUtc, 0, false, SourceCoverageStatus.AccessDenied, @"Access denied for SecretGamer88"),
+            new("System", BaseUtc.AddHours(-2), BaseUtc, 5, false, SourceCoverageStatus.PartialTimeout, @"Timeout on MY-SECRET-RIG")
+        };
+        var degradedReport = report with { Coverage = degradedCov };
+
+        var share = ShareReportProjector.Project(degradedReport, new ShareOptions(), context, TimeZoneInfo.Utc);
+        var md = MarkdownReportExporter.Render(share);
+
+        Assert.NotNull(share.SourceLimitationNotes);
+        Assert.Contains(share.SourceLimitationNotes!, static n => n.Contains("已截断（达到每频道上限）", StringComparison.Ordinal));
+        Assert.Contains(share.SourceLimitationNotes!, static n => n.Contains("权限受限（标准权限不可读）", StringComparison.Ordinal));
+        Assert.Contains(share.SourceLimitationNotes!, static n => n.Contains("超时降级（超过 10 秒软超时）", StringComparison.Ordinal));
+        Assert.Contains("采集受限与数据边界说明", md);
+        AssertContainsZeroSecrets(md);
+    }
 }

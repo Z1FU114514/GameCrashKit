@@ -115,7 +115,14 @@ public static class EmergencyCardPngRenderer
             bodyStack.Children.Add(BuildEnvironmentCard(model.EnvironmentFacts));
         }
 
-        // 6. System Background & Coverage Footer
+        // 6. Source Limitation & Boundary Notes
+        if (model.SourceLimitationNotes is { Count: > 0 })
+        {
+            bodyStack.Children.Add(BuildSectionHeading("采集受限与数据边界说明"));
+            bodyStack.Children.Add(BuildLimitationCard(model.SourceLimitationNotes));
+        }
+
+        // 7. System Background & Coverage Footer
         bodyStack.Children.Add(BuildFooterBlock(model));
 
         mainStack.Children.Add(bodyStack);
@@ -209,6 +216,10 @@ public static class EmergencyCardPngRenderer
         AddKvLine(right, "发生时间", model.TimestampDisplay);
         AddKvLine(right, "安装来源", model.DisambiguatedPathSuffix);
         AddKvLine(right, "窗口频次", model.OccurrenceSummary);
+        if (!string.IsNullOrWhiteSpace(model.ScanScopeSummary))
+        {
+            AddKvLine(right, "扫描范围", model.ScanScopeSummary);
+        }
 
         Grid.SetColumn(left, 0);
         Grid.SetColumn(right, 2);
@@ -402,6 +413,34 @@ public static class EmergencyCardPngRenderer
         }
 
         return CreateCardBorder(stack, new Thickness(0, 0, 0, 14));
+    }
+
+    private static Border BuildLimitationCard(IReadOnlyList<string> notes)
+    {
+        var stack = new StackPanel();
+        foreach (var note in notes)
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text = $"• {note}",
+                FontFamily = CardFont,
+                FontSize = 12.5,
+                Foreground = WarningFg,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 4)
+            });
+        }
+
+        return new Border
+        {
+            Background = WarningBg,
+            BorderBrush = CardBorder,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(16, 11, 16, 9),
+            Margin = new Thickness(0, 0, 0, 14),
+            Child = stack
+        };
     }
 
     private static Border BuildFooterBlock(ShareReportModel model)

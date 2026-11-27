@@ -46,4 +46,6 @@ public sealed record ShareReportModel(
     bool HasAvailableExcerptSource,
     bool HasOptInExcerpt,
     IReadOnlyList<string> OptInScrubbedExcerptLines,
-    IReadOnlyList<ShareFindingItem>? AdditionalHints = null);
+    IReadOnlyList<ShareFindingItem>? AdditionalHints = null,
+    string? ScanScopeSummary = null,
+    IReadOnlyList<string>? SourceLimitationNotes = null);

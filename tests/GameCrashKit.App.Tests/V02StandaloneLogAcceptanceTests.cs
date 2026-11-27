@@ -95,6 +95,9 @@ public sealed class V02StandaloneLogAcceptanceTests
                 new ShareOptions(HideAppName: true, HideExactTimestamp: true, IncludeScrubbedErrorExcerpt: true));
 
             Assert.Contains("来源：手选日志（独立诊断）", md);
+            Assert.Contains("扫描范围", md);
+            Assert.Contains("未扫描", md);
+            Assert.Contains("采集受限与数据边界说明", md);
             Assert.Contains("致命崩溃", md);
             Assert.Contains("DXGI_ERROR_DEVICE_REMOVED", md);
             Assert.Contains("不适用（无 Windows 事件锚点）", md);
@@ -177,6 +180,8 @@ public sealed class V02StandaloneLogAcceptanceTests
             var (md, _) = RenderBothShareOutputs(vm.CurrentReport!, ScrubContext.Empty, new ShareOptions(IncludeScrubbedErrorExcerpt: true));
             Assert.Contains("0x887A0005", md);
             Assert.Contains("仅检查尾段 2 MiB", md);
+            Assert.Contains("采集受限与数据边界说明", md);
+            Assert.Contains("超出 2 MiB 只读上限", md);
 
             // Empty UE XML & oversized UE XML -> controlled failure without throwing or clearing UI readiness
             var emptyXmlPath = Path.Combine(tempDir.FullName, "EmptyCrashContext.runtime-xml");

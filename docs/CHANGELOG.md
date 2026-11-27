@@ -1,5 +1,13 @@
 # 更新日志 (Changelog)
 
+## [v0.2.0-alpha.1] - 2026-11-27
+
+通用信号底座最小演进、仅手选日志独立报告与单次分享信息完备性版本：
+* **底座通用化演进**：扩展固定日志信号集合（`LogSignalId`、`LogSignalMatch`、`FormatDisplayLabel`）与三态报告主体（`WindowsIncident` / `StandaloneLogOnly` / `InsufficientEvidence`），保持纯 C# 静态注册与审核可控边界。
+* **冷启动仅手选日志独立诊断（MVP）**：无需先按 `F5` 扫描 Windows 事件，直接拖入或 `Ctrl + O` 选择 Unity / Unreal / 通用 `.log`/`.txt` 日志即可生成并导出独立急诊卡（新增 `LOG-ONLY-SUMMARY@1` 与模式切换「独立查看 / 关联当前事故」），严格不虚构 Windows 事件号或故障模块，覆盖 Unreal 非致命 `Ensure`、2 MiB 截断日志及纯数字图形码场景。
+* **单次分享信息完备性**：Markdown 与 900px 浅底 PNG 急诊单同步新增「扫描范围」（相对时间窗、过滤模式与每频道上限，不含精确时钟泄漏）与「采集受限与数据边界说明」（纯枚举模板生成，绝不透传系统原始错误文本），同时保留无 `RawErrorExcerpt` 原文出口、句柄级防覆盖与零 PII 隐私边界。
+* **自动化测试与离线沙盒复验**：核心、Windows 与 WPF 端到端测试矩阵全部通过，并在断网无 `.NET 10` 预装的 Windows Sandbox 跑通 11 项全自动无人值守验收。
+
 ## [v0.1.0-alpha.2] - 2026-11-27
 
 安全边界与归因准确度加固补丁：

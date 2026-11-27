@@ -23,7 +23,12 @@ public static class MarkdownReportExporter
         sb.Append($"- **异常代码**: `{model.ExceptionCode}`\n");
         sb.Append($"- **发生时间**: {model.TimestampDisplay}\n");
         sb.Append($"- **安装来源**: `{model.DisambiguatedPathSuffix}`\n");
-        sb.Append($"- **窗口频次**: {model.OccurrenceSummary}\n\n");
+        sb.Append($"- **窗口频次**: {model.OccurrenceSummary}\n");
+        if (!string.IsNullOrWhiteSpace(model.ScanScopeSummary))
+        {
+            sb.Append($"- **扫描范围**: {model.ScanScopeSummary}\n");
+        }
+        sb.Append('\n');
 
         sb.Append("## 2. 诊断结论与下一步建议\n");
         if (model.PrimaryFindings.Count == 0)
@@ -82,6 +87,16 @@ public static class MarkdownReportExporter
             foreach (var bg in model.BackgroundSummaryLines)
             {
                 sb.Append($"- {bg}\n");
+            }
+            sb.Append('\n');
+        }
+
+        if (model.SourceLimitationNotes is { Count: > 0 })
+        {
+            sb.Append("## 采集受限与数据边界说明\n");
+            foreach (var note in model.SourceLimitationNotes)
+            {
+                sb.Append($"- {note}\n");
             }
             sb.Append('\n');
         }

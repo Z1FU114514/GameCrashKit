@@ -12,6 +12,7 @@ public sealed class EmergencyCardPngRendererTests
     public void RenderToPngBytes_OnStaThread_ProducesValid900px96DpiPngMatchingPreviewDecode()
     {
         PngRenderResult? renderResult = null;
+        ShareReportModel? projectedModel = null;
         int decodedPixelWidth = 0;
         int decodedPixelHeight = 0;
         double decodedDpiX = 0;
@@ -22,8 +23,8 @@ public sealed class EmergencyCardPngRendererTests
         {
             try
             {
-                var shareModel = BuildSampleShareModel(includeExcerpt: true);
-                renderResult = EmergencyCardPngRenderer.RenderToPngBytes(shareModel);
+                projectedModel = BuildSampleShareModel(includeExcerpt: true);
+                renderResult = EmergencyCardPngRenderer.RenderToPngBytes(projectedModel);
 
                 var preview = EmergencyCardPngRenderer.CreateFrozenBitmapImage(renderResult.PngBytes);
                 decodedPixelWidth = preview.PixelWidth;
@@ -42,6 +43,9 @@ public sealed class EmergencyCardPngRendererTests
         thread.Join();
 
         Assert.Null(staException);
+        Assert.NotNull(projectedModel);
+        Assert.False(string.IsNullOrWhiteSpace(projectedModel!.ScanScopeSummary));
+        Assert.NotEmpty(projectedModel.SourceLimitationNotes!);
         Assert.NotNull(renderResult);
         Assert.Equal(EmergencyCardPngRenderer.CardWidth, renderResult!.PixelWidth);
         Assert.InRange(renderResult.PixelHeight, 500, 2400);
