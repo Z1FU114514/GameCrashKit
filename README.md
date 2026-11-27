@@ -22,7 +22,7 @@
 
 1. 前往仓库 **Releases** 页面下载便携版压缩包（`GameCrashKit-v0.2.0-alpha.1-win-x64.zip`）与校验文件 `SHA256SUMS.txt`；程序已自包含运行环境，无需预装 .NET。
 2. 建议先核对 ZIP 文件的 SHA-256 校验值，解压到任意本地目录后直接双击 `GameCrashKit.App.exe` 运行（无需安装、不弹出 UAC）。
-3. **关于 Windows SmartScreen 提示**：`v0.2.0-alpha.1` 暂未购买商业代码签名证书，部分机器初次运行时可能看到“未知发布者”拦截提示；核对官方 SHA-256 无误后点「更多信息 → 仍要运行」即可，无需关闭系统防护软件。
+3. **关于 Windows SmartScreen 提示**：`v0.2.0-alpha.1` 暂未附加代码签名证书。核对官方 `.SHA256SUMS.txt` 无误后，建议先**右键刚下载的 ZIP →「属性」→ 勾选「解除锁定」**再使用资源管理器全部提取；若已直接解压并看到蓝底拦截提示，点击**「更多信息 → 仍要运行」**即可（全程无需关闭系统防护软件，详见 [首次运行可信度与签名指南](docs/FIRST_RUN_TRUST_AND_SIGNING.md) 与 [安全政策](SECURITY.md)）。
 
 ## 快捷键
 

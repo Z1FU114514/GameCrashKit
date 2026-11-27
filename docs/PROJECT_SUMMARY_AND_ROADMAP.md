@@ -88,12 +88,9 @@ flowchart LR
     S3 --> S4["远期: v0.3+ 静态适配器扩展与发布渠道"]
 ```
 
-### 下一步 1：首轮真实跨软件与游戏公开样本盲测（近期）
-- 不等外部玩家，使用公开可复现/公开支持样本做独立冷启动对照测试：
-  1. **Blender**：用已知公开最小复现文件分别在受影响版与修复版上实跑，核对实际退出进程、命中信号与修复版差异。
-  2. **OBS Studio**：选取社区公开 Windows 支持日志做盲筛，对比急诊单与社区维护者人工结论，评估是否增加最小 OBS 静态文本解析适配器。
-  3. **ComfyUI Desktop**：验证 Python 子进程异常退出的识别与壳层隔离表现。
+### 下一步 1：首轮真实跨软件与游戏公开样本盲测（已完成第 1 批匿名化格式矩阵，见 [跨软件第 1 轮评估报告](CROSS_APP_EVALUATION_ROUND1.md)）
+- 已建立 OBS Studio（D3D11 设备丢失与正常录屏负例）、Blender 4.2（`EXCEPTION_ACCESS_VIOLATION` 与 Cycles OOM）、ComfyUI Desktop（CUDA OOM 与 `3221225477` 退出码）共 6 组匿名化真实格式夹具，冷启动全链路与脱敏导出 6/6 通过、负例 0 误报；待进一步采集真机装包复现的 Windows Event `1000` 联立样本。
 
-### 下一步 2：真机多环境实测与首次运行可信度（中短期）
-- 在 **Windows 10 22H2**、英文/繁体系统、125%–200% DPI 缩放及普通标准账户浏览器下载场景下验证便携包首次运行（SmartScreen）体验，并评估接入免费开源 Authenticode 代码签名（如 SignPath）。
+### 下一步 2：真机多环境实测与首次运行可信度（已补齐实测探测与 SignPath 治理清单，见 [首次运行可信度与签名报告](FIRST_RUN_TRUST_AND_SIGNING.md)）
+- 已完成非提权 `Win11 25H2` 与干净 `Win11 24H2` 沙盒的浏览器 MotW 下载解压、SmartScreen 实测阻塞、`Unblock-File` 零 UAC 放行复测，并落地 [SECURITY.md](../SECURITY.md) 与 [CONTRIBUTING.md](../CONTRIBUTING.md)；**Windows 10 22H2** 仍诚实保持待实机验证（可使用 `scripts/Test-FirstRunTrust.ps1` 一键复核），接下来在 GitHub 网页开启 `main` 分支保护并提交 SignPath Foundation 免费开源签名申请。
 - **继续坚持暂缓清单**：不引入动态 DLL/脚本插件机制、不引入可下载规则 DSL、不做全机软件无预算自动盘点。
