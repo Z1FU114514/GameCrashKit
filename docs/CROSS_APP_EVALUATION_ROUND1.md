@@ -16,14 +16,14 @@
 
 所有夹具均植入对抗性虚构隐私数据（`SecretStreamer` / `SecretArtist` / `SecretDev`、私有用例路径、私有插件路径、提交哈希 `a9326cb1a8cb`、局域网 IP `192.168.1.55`、`--api-key=secret_comfy_key`、`token='obs_secret_tok'`）：
 
-| 样本文件 | 软件与场景 | `v0.2.0-alpha.1` 基线表现（适配前） | 静态适配器介入后实测表现 | 隐私与只读 |
+| 样本文件 | 软件与场景 | `v0.2.0-alpha.1` 基线表现（适配前） | 红队加固后实测表现（`v0.2.0-alpha.3`） | 隐私与只读 |
 | :--- | :--- | :--- | :--- | :--- |
-| `obs-d3d11-device-removed.txt` | OBS `30.2.3` `device_texture_create (887A0005)` + `Device Remove/Reset!` | 落回「通用文本日志 / 致命性未知」，未识别括号包裹 `(887A0005)` | 识别为 `OBS Studio 日志` / `Fatal` / 版本 `30.2.3` / `Direct3D 11`，触发 **`ENGINE-GPU-LOST@2`** + `LOG-ONLY-SUMMARY@1` | 零泄漏、哈希不变 |
-| `obs-normal-session.txt` | **负例对照**：OBS 正常录屏起停，0 错误 / 0 泄漏 | 通用文本日志 / 未命中 | 识别为 `OBS Studio 日志` / 致命性未知 / **0 误报信号**，仅输出 `LOG-ONLY-SUMMARY@1（未命中已知标记）` | 零泄漏、哈希不变 |
-| `blender-4.2-av.crash.txt` | Blender `4.2.0` `EXCEPTION_ACCESS_VIOLATION` + Python 私有插件调用栈 | 通用文本日志 / 致命性未知 / 未提取 AV 信号 | 识别为 `Blender 崩溃日志` / `Fatal` / 版本 `4.2.0`（分享已剥离 Hash）/ **`AccessViolation`**，并彻底阻断 `# backtrace` 与 `# Python backtrace` 私有路径 | 零泄漏、哈希不变 |
-| `blender-4.2-cycles-oom.log` | Blender `4.2.0` Cycles `CUDA error: Out of memory` + 共享内存耗尽 | 未命中特定 CUDA/Cycles 短语 | 识别为 `Blender 崩溃日志` / `Fatal` / `OutOfMemory`，直接复用 **`ENGINE-OOM@2`** | 零泄漏、哈希不变 |
-| `comfyui-desktop-cuda-oom.log` | ComfyUI Desktop `v0.4.2` `torch.OutOfMemoryError: CUDA out of memory` | 未命中 PyTorch CUDA OOM 短语 | 识别为 `ComfyUI 日志` / `Fatal` / 版本 `0.4.2` / **`CUDA out of memory`**，直接复用 **`ENGINE-OOM@2`** | 零泄漏、哈希不变 |
-| `comfyui-desktop-python-av.log` | ComfyUI Desktop Electron 壳报错 `Python process exited with code 3221225477` | 无法把十进制退出码 `3221225477` 对应为 `0xc0000005` | 识别为 `ComfyUI 日志` / `Fatal` / **`0xc0000005 (exit code 3221225477)`**，**严格未误判为 OOM** | 零泄漏、哈希不变 |
+| `obs-d3d11-device-removed.txt` | OBS `30.2.3` `device_texture_create (887A0005)` + `Device Remove/Reset!` | 落回「通用文本日志 / 进程退出未证实」，未识别括号包裹 `(887A0005)` | 识别为 `OBS Studio 日志` / **`进程退出未证实`**（避免将重建提示误判为退出）/ 版本 `30.2.3` / `Direct3D 11`，触发 **`ENGINE-GPU-LOST@2`（有限线索）** + `LOG-ONLY-SUMMARY@1` | 零泄漏（含隐藏软件名）、哈希不变 |
+| `obs-normal-session.txt` | **负例对照**：OBS 正常录屏起停，0 错误 / 0 泄漏 | 通用文本日志 / 未命中 | 识别为 `OBS Studio 日志` / `进程退出未证实` / **0 误报信号**，仅输出 `LOG-ONLY-SUMMARY@1（未命中已知标记）`，`HideAppName` 开关下摘要/标题/信号栏均零泄漏软件名 | 零泄漏、哈希不变 |
+| `blender-4.2-av.crash.txt` | Blender `4.2.0` `EXCEPTION_ACCESS_VIOLATION` + Python 私有插件调用栈 | 通用文本日志 / 未提取 AV 信号 | 识别为 `Blender 崩溃日志` / **`Fatal`** / 版本 `4.2.0`（分享已剥离 Hash）/ 仅从 `ExceptionCode` 提取 **`AccessViolation`**（剔除 `Stack trace` 内误导串与 `# Python backtrace` 私有路径） | 零泄漏、哈希不变 |
+| `blender-4.2-cycles-oom.log` | Blender `4.2.0` Cycles `CUDA error: Out of memory` + 共享内存耗尽 | 未命中特定 CUDA/Cycles 短语 | 识别为 `Blender 崩溃日志` / **`进程退出未证实`** / `OutOfMemory`，触发 **`ENGINE-OOM@2`（有限线索，不建议修改页面文件）** | 零泄漏、哈希不变 |
+| `comfyui-desktop-cuda-oom.log` | ComfyUI Desktop `v0.4.2` `torch.OutOfMemoryError: CUDA out of memory` | 未命中 PyTorch CUDA OOM 短语 | 识别为 `ComfyUI 日志` / **`进程退出未证实`** / 版本 `0.4.2` / **`CUDA out of memory`**，触发 **`ENGINE-OOM@2`（有限线索）**；且严格隔离先前本机扫描的 `Environment` 与 `Kernel-Power 41` | 零泄漏、哈希不变 |
+| `comfyui-desktop-python-av.log` | ComfyUI Desktop Electron 壳报错 `Python process exited with code 3221225477`（含带冒号变体） | 无法把十进制退出码 `3221225477` 对应为 `0xc0000005` | 识别为 `ComfyUI 日志` / **`子进程异常退出 (ChildProcessExit)`** / **`Python 子进程异常退出 0xc0000005 (exit code 3221225477)`**，**严格未误判为 OOM 或主进程退出** | 零泄漏、哈希不变 |
 
 ---
 

@@ -579,6 +579,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         if (!string.IsNullOrWhiteSpace(log.EngineVersion)) sigs.Add($"引擎 {log.EngineVersion}");
         if (!string.IsNullOrWhiteSpace(log.RhiBackend)) sigs.Add(log.RhiBackend);
         if (log.Fatality == LogFatalityKind.NonFatalEnsure) sigs.Add("非致命 Ensure");
+        else if (log.Fatality == LogFatalityKind.ChildProcessExit) sigs.Add("子进程异常退出");
         else if (log.Fatality == LogFatalityKind.Fatal) sigs.Add("致命错误");
         if (log.HasGpuDeviceLostSignal) sigs.Add($"图形错误标记: {log.GpuLostToken}");
         if (log.HasOutOfMemorySignal) sigs.Add($"资源耗尽标记: {log.OomToken}");

@@ -2,7 +2,7 @@
 
 面向 Windows PC 玩家与轻度 Mod 玩家的**开源、纯本地、零提权、只读式事后游戏闪退取证与脱敏急诊单工具**。
 
-> **当前版本**：`v0.2.0-alpha.2`（公开预览版 · 绿色免安装，纯本地只读运行）。详见 [更新日志](docs/CHANGELOG.md) 与 [支持范围](docs/SUPPORT_MATRIX.md)。
+> **当前版本**：`v0.2.0-alpha.3`（公开预览版 · 绿色免安装，纯本地只读运行）。详见 [更新日志](docs/CHANGELOG.md) 与 [支持范围](docs/SUPPORT_MATRIX.md)。
 
 ## 核心功能与设计亮点
 
@@ -20,9 +20,9 @@
 
 ## 下载与免安装使用
 
-1. 前往仓库 **Releases** 页面下载便携版压缩包（`GameCrashKit-v0.2.0-alpha.2-win-x64.zip`）与校验文件 `SHA256SUMS.txt`；程序已自包含运行环境，无需预装 .NET。
+1. 前往仓库 **Releases** 页面下载便携版压缩包（`GameCrashKit-v0.2.0-alpha.3-win-x64.zip`）与校验文件 `SHA256SUMS.txt`；程序已自包含运行环境，无需预装 .NET。
 2. 建议先核对 ZIP 文件的 SHA-256 校验值，解压到任意本地目录后直接双击 `GameCrashKit.App.exe` 运行（无需安装、不弹出 UAC）。
-3. **关于 Windows SmartScreen 提示**：`v0.2.0-alpha.2` 暂未附加代码签名证书。核对官方 `.SHA256SUMS.txt` 无误后，建议先**右键刚下载的 ZIP →「属性」→ 勾选「解除锁定」**再使用资源管理器全部提取；若已直接解压并看到蓝底拦截提示，点击**「更多信息 → 仍要运行」**即可（全程无需关闭系统防护软件，详见 [首次运行可信度与签名指南](docs/FIRST_RUN_TRUST_AND_SIGNING.md) 与 [安全政策](SECURITY.md)）。
+3. **关于 Windows SmartScreen 提示**：`v0.2.0-alpha.3` 暂未附加代码签名证书。核对官方 `.SHA256SUMS.txt` 无误后，建议先**右键刚下载的 ZIP →「属性」→ 勾选「解除锁定」**再使用资源管理器全部提取；若已直接解压并看到蓝底拦截提示，点击**「更多信息 → 仍要运行」**即可（全程无需关闭系统防护软件，详见 [首次运行可信度与签名指南](docs/FIRST_RUN_TRUST_AND_SIGNING.md) 与 [安全政策](SECURITY.md)）。
 
 ## 快捷键
 
@@ -41,10 +41,10 @@ dotnet build GameCrashKit.sln -c Release
 dotnet test GameCrashKit.sln -c Release --no-build
 
 # 一键构建绿色便携版 ZIP 与 SHA-256 校验文件
-pwsh -File scripts/Publish-Portable.ps1 -VersionLabel "v0.2.0-alpha.2"
+pwsh -File scripts/Publish-Portable.ps1 -VersionLabel "v0.2.0-alpha.3"
 
 # 运行自动化发布检查（含只读哈希不变校验与扫描耗时基准）
-pwsh -File scripts/Verify-ReleaseGate.ps1 -PortableDir "publish\GameCrashKit-v0.2.0-alpha.2-win-x64"
+pwsh -File scripts/Verify-ReleaseGate.ps1 -PortableDir "publish\GameCrashKit-v0.2.0-alpha.3-win-x64"
 ```
 
 ## 相关文档

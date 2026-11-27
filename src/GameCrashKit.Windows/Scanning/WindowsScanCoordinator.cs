@@ -137,19 +137,20 @@ public sealed class WindowsScanCoordinator
         if (useStandaloneLog)
         {
             var standaloneRequest = session?.Request ?? CreateFallbackRequest();
+            var standaloneScanStateLabel = ResolveStandaloneWindowsScanStateLabel(session);
             var standaloneContext = new RuleEvaluationContext(
                 Request: standaloneRequest,
                 SelectedIncident: null,
-                SystemBackgroundEvents: session?.Correlated.SystemBackgroundEvents ?? [],
+                SystemBackgroundEvents: [],
                 Coverage: session?.Coverage ?? [],
-                Environment: session?.Environment,
+                Environment: null,
                 StandaloneLog: confirmedEngineLog,
                 SubjectKind: ReportSubjectKind.StandaloneLogOnly,
-                WindowsScanStateLabel: scanStateLabel);
+                WindowsScanStateLabel: standaloneScanStateLabel);
 
             return _ruleEngine.Evaluate(
                 standaloneContext,
-                session?.Correlated.AllEvidence ?? [],
+                [],
                 appVersion);
         }
 
@@ -204,6 +205,18 @@ public sealed class WindowsScanCoordinator
     {
         var nowUtc = DateTimeOffset.UtcNow;
         return new ScanRequest(nowUtc.AddHours(-2), nowUtc, false, 0);
+    }
+
+    private static string ResolveStandaloneWindowsScanStateLabel(ScanSessionResult? session)
+    {
+        if (session is null)
+        {
+            return "未扫描";
+        }
+
+        return (session.TimedOut || session.Coverage.Any(static c => c.Status != SourceCoverageStatus.Ok))
+            ? "已扫描，未关联（部分来源受限）"
+            : "已扫描，未关联";
     }
 
     private static string ResolveWindowsScanStateLabel(ScanSessionResult? session, CrashIncident? selectedIncident)

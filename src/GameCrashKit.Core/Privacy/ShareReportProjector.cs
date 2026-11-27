@@ -44,7 +44,8 @@ public static partial class ShareReportProjector
             {
                 LogFatalityKind.Fatal => "致命崩溃/报错",
                 LogFatalityKind.NonFatalEnsure => "非致命 Ensure",
-                _ => "未知"
+                LogFatalityKind.ChildProcessExit => "子进程异常退出（主进程退出未证实）",
+                _ => "进程退出未证实"
             };
             var winState = string.IsNullOrWhiteSpace(report.WindowsScanStateLabel) ? "未扫描" : report.WindowsScanStateLabel;
             installSource = $"致命性: {fatalityText} | Windows: {winState}";
@@ -97,12 +98,13 @@ public static partial class ShareReportProjector
             timestampDisplay = FormatTimestamp(inc?.OccurredAtUtc, options.HideExactTimestamp, tz, report.GeneratedAtUtc);
         }
 
+        var formatLabel = activeLog?.EffectiveFormatLabel;
         var findings = report.PrimaryFindings
-            .Select(f => ProjectFinding(f, inc?.AppName, options.HideAppName, options.HideExactTimestamp, scrubContext))
+            .Select(f => ProjectFinding(f, inc?.AppName, formatLabel, options.HideAppName, options.HideExactTimestamp, scrubContext))
             .ToList();
 
         var additionalHints = (report.AdditionalHints ?? [])
-            .Select(f => ProjectFinding(f, inc?.AppName, options.HideAppName, options.HideExactTimestamp, scrubContext))
+            .Select(f => ProjectFinding(f, inc?.AppName, formatLabel, options.HideAppName, options.HideExactTimestamp, scrubContext))
             .ToList();
 
         var backgroundLines = report.SystemBackgroundEvents
@@ -127,13 +129,14 @@ public static partial class ShareReportProjector
         var scanScopeSummary = BuildScanScopeSummary(report, isStandaloneLog);
         var limitationNotes = BuildSourceLimitationNotes(report, activeLog, isStandaloneLog, scrubContext);
 
-        var signalTemplates = BuildFixedSignalSummaryLines(activeLog);
+        var signalTemplates = BuildFixedSignalSummaryLines(activeLog, options.HideAppName);
         var hasAvailableExcerptSource = signalTemplates.Count > 0;
         var scrubbedExcerpts = (options.IncludeScrubbedErrorExcerpt && hasAvailableExcerptSource)
             ? signalTemplates
-                .Select(line => ScrubFindingAppNameIfHidden(
+                .Select(line => ScrubHiddenIdentities(
                     PrivacyScrubber.ScrubText(line, scrubContext, scrubIpv4: true, hideTimestamps: options.HideExactTimestamp),
                     inc?.AppName,
+                    formatLabel,
                     options.HideAppName))
                 .ToList()
             : [];
@@ -253,26 +256,31 @@ public static partial class ShareReportProjector
     private static ShareFindingItem ProjectFinding(
         DiagnosisFinding f,
         string? appName,
+        string? formatLabel,
         bool hideAppName,
         bool hideTimestamps,
         ScrubContext scrubContext)
     {
-        var title = ScrubFindingAppNameIfHidden(
+        var title = ScrubHiddenIdentities(
             PrivacyScrubber.ScrubText(f.Title, scrubContext, scrubIpv4: true, hideTimestamps: hideTimestamps),
             appName,
+            formatLabel,
             hideAppName);
-        var statement = ScrubFindingAppNameIfHidden(
+        var statement = ScrubHiddenIdentities(
             PrivacyScrubber.ScrubText(f.Statement, scrubContext, scrubIpv4: true, hideTimestamps: hideTimestamps),
             appName,
+            formatLabel,
             hideAppName);
-        var nextAction = ScrubFindingAppNameIfHidden(
+        var nextAction = ScrubHiddenIdentities(
             PrivacyScrubber.ScrubText(f.NextActionText, scrubContext, scrubIpv4: true, hideTimestamps: hideTimestamps),
             appName,
+            formatLabel,
             hideAppName);
         var notes = f.AmbiguityNotes
-            .Select(n => ScrubFindingAppNameIfHidden(
+            .Select(n => ScrubHiddenIdentities(
                 PrivacyScrubber.ScrubText(n, scrubContext, scrubIpv4: true, hideTimestamps: hideTimestamps),
                 appName,
+                formatLabel,
                 hideAppName))
             .Where(static n => !string.IsNullOrWhiteSpace(n))
             .ToList();
@@ -288,7 +296,7 @@ public static partial class ShareReportProjector
             AmbiguityNotes: notes);
     }
 
-    private static IReadOnlyList<string> BuildFixedSignalSummaryLines(UserConfirmedEngineLog? log)
+    private static IReadOnlyList<string> BuildFixedSignalSummaryLines(UserConfirmedEngineLog? log, bool hideAppName = false)
     {
         if (log is null)
         {
@@ -301,10 +309,12 @@ public static partial class ShareReportProjector
         {
             LogFatalityKind.Fatal => "致命错误/崩溃",
             LogFatalityKind.NonFatalEnsure => "非致命 Ensure（未证实崩溃）",
-            _ => "未标明"
+            LogFatalityKind.ChildProcessExit => "子进程异常退出（主进程退出未证实）",
+            _ => "进程退出未证实"
         };
 
-        var header = $"日志类型: {log.EffectiveFormatLabel} | 致命性: {fatalityLabel}";
+        var formatLabelText = hideAppName ? "<已隐藏>" : log.EffectiveFormatLabel;
+        var header = $"日志类型: {formatLabelText} | 致命性: {fatalityLabel}";
         if (safeVersion is not null)
         {
             header += $" | 规范版本号: {safeVersion}";
@@ -407,24 +417,38 @@ public static partial class ShareReportProjector
         return appStem.Length >= 3 && string.Equals(modStem, appStem, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string ScrubFindingAppNameIfHidden(string text, string? appName, bool hideAppName)
+    private static string ScrubHiddenIdentities(string text, string? appName, string? formatLabel, bool hideAppName)
     {
-        if (!hideAppName || string.IsNullOrWhiteSpace(appName))
+        if (!hideAppName)
         {
             return text;
         }
 
-        var trimmed = appName.Trim();
         var result = text;
-        if (trimmed.Length >= 2)
+        if (!string.IsNullOrWhiteSpace(formatLabel))
         {
-            result = result.Replace(trimmed, "<APP>", StringComparison.OrdinalIgnoreCase);
+            result = result.Replace(formatLabel.Trim(), "<已隐藏>", StringComparison.OrdinalIgnoreCase);
         }
 
-        var stem = Path.GetFileNameWithoutExtension(trimmed);
-        if (stem.Length >= 3)
+        ReadOnlySpan<string> knownAppLabels = ["OBS Studio", "Blender", "ComfyUI", "Unity", "Unreal"];
+        foreach (var label in knownAppLabels)
         {
-            result = result.Replace(stem, "<APP>", StringComparison.OrdinalIgnoreCase);
+            result = result.Replace(label, "<已隐藏>", StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (!string.IsNullOrWhiteSpace(appName))
+        {
+            var trimmed = appName.Trim();
+            if (trimmed.Length >= 2)
+            {
+                result = result.Replace(trimmed, "<APP>", StringComparison.OrdinalIgnoreCase);
+            }
+
+            var stem = Path.GetFileNameWithoutExtension(trimmed);
+            if (stem.Length >= 3)
+            {
+                result = result.Replace(stem, "<APP>", StringComparison.OrdinalIgnoreCase);
+            }
         }
 
         return result;

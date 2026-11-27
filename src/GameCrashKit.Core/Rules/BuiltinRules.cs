@@ -298,10 +298,20 @@ public static class BuiltinRules
                     SpecificityRank: SpecificityRank);
             }
 
-            var strength = log.IsTruncated ? EvidenceStrength.LimitedClue : EvidenceStrength.ExplicitRecord;
+            var hasProvenProcessExit =
+                context.SelectedIncident is { AnchorKind: IncidentAnchorKind.ApplicationCrash } ||
+                log.Fatality == LogFatalityKind.Fatal;
+            var strength = (log.IsTruncated || !hasProvenProcessExit)
+                ? EvidenceStrength.LimitedClue
+                : EvidenceStrength.ExplicitRecord;
             var extra4101 = has4101 ? " 同时在故障前后 120 秒内记录到系统显示恢复背景事件，两者时间吻合。" : string.Empty;
 
             var ambiguity = new List<string>();
+            if (!hasProvenProcessExit)
+            {
+                ambiguity.Add("日志未证实主进程已异常退出，仅作为有限线索。");
+            }
+
             if (log.IsTruncated)
             {
                 ambiguity.Add("日志文件超出 2 MiB 读取上限，仅检查尾段 2 MiB。");
@@ -406,7 +416,17 @@ public static class BuiltinRules
                     SpecificityRank: SpecificityRank);
             }
 
+            var hasProvenProcessExit =
+                codeOom ||
+                context.SelectedIncident is { AnchorKind: IncidentAnchorKind.ApplicationCrash } ||
+                log.Fatality == LogFatalityKind.Fatal;
+
             var ambiguity = new List<string>();
+            if (!hasProvenProcessExit)
+            {
+                ambiguity.Add("日志未证实主进程已异常退出，仅作为有限线索（暂不建议据此修改页面文件设置）。");
+            }
+
             if (log.IsTruncated)
             {
                 ambiguity.Add("日志文件超出 2 MiB 读取上限，仅检查尾段 2 MiB。");
@@ -418,10 +438,13 @@ public static class BuiltinRules
             }
 
             var attribution = codeOom ? AttributionStrength.Direct : AttributionStrength.UserSelected;
-            var strength = log.IsTruncated ? EvidenceStrength.LimitedClue : EvidenceStrength.ExplicitRecord;
+            var strength = (log.IsTruncated || !hasProvenProcessExit)
+                ? EvidenceStrength.LimitedClue
+                : EvidenceStrength.ExplicitRecord;
 
             var pageFile = context.Environment?.PageFile;
-            var allowPageFileHint = !log.IsTruncated &&
+            var allowPageFileHint = hasProvenProcessExit &&
+                !log.IsTruncated &&
                 pageFile is { Checked: true } &&
                 (pageFile.IsDisabled || pageFile.TotalAllocatedMb < 4096);
 
@@ -656,9 +679,28 @@ public static class BuiltinRules
                     SpecificityRank: SpecificityRank);
             }
 
+            if (log.Fatality == LogFatalityKind.ChildProcessExit)
+            {
+                ambiguity.Add("仅观察到子进程退出记录，主程序本体是否随之退出尚未证实。");
+                return new DiagnosisFinding(
+                    RuleId: RuleId,
+                    RuleVersion: RuleVersion,
+                    Title: $"仅手选日志诊断：{formatLabel}（子进程异常退出）",
+                    Statement: $"已安全读取手选日志并观测到子进程异常退出记录{(tokens.Length > 0 ? $"（{string.Join(" / ", tokens)}）" : string.Empty)}。主程序自身是否异常退出及系统级故障模块尚未证实。",
+                    Attribution: AttributionStrength.UserSelected,
+                    EvidenceStrength: EvidenceStrength.LimitedClue,
+                    EvidenceIds: [$"engine-log:{log.Kind}"],
+                    AmbiguityNotes: ambiguity,
+                    NextActionTemplateId: "STANDALONE_LOG_CHILD_EXIT",
+                    NextActionText: "建议在空闲窗口按 F5 扫描 Windows 事件，核对是子进程还是主程序退出，并排查对应扩展插件或依赖环境。",
+                    OfficialReferenceLabel: null,
+                    OfficialReferenceUrl: null,
+                    SpecificityRank: SpecificityRank);
+            }
+
             if (tokens.Length > 0)
             {
-                var fatalityLabel = log.Fatality == LogFatalityKind.Fatal ? "致命错误" : "致命性未知";
+                var fatalityLabel = log.Fatality == LogFatalityKind.Fatal ? "致命错误" : "进程退出未证实";
                 var strength = log.IsTruncated || log.Fatality != LogFatalityKind.Fatal
                     ? EvidenceStrength.LimitedClue
                     : EvidenceStrength.ExplicitRecord;

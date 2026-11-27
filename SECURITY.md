@@ -26,7 +26,7 @@
 
 ## 代码签名与首发可信政策（SignPath Foundation 就绪规范）
 
-* **当前状态**：`v0.2.0-alpha.2` 便携发行包暂未附加商业或开源 Authenticode 证书，因此 Windows Defender SmartScreen 首次运行从浏览器解压出的程序时可能提示“未知发布者”。请用户核对官方 Releases 页面提供的 `.SHA256SUMS.txt` 校验值后再运行。
+* **当前状态**：`v0.2.0-alpha.3` 便携发行包暂未附加商业或开源 Authenticode 证书，因此 Windows Defender SmartScreen 首次运行从浏览器解压出的程序时可能提示“未知发布者”。请用户核对官方 Releases 页面提供的 `.SHA256SUMS.txt` 校验值后再运行。
 * **开源签名规划（SignPath Foundation）**：本软件所有发行产物均严格遵守 `MIT OR Apache-2.0` 双重开源许可，不包含任何闭源或商业二元组件，且所有官方 ZIP 均仅由 GitHub 托管的 `windows-latest` runner 基于公开源码与 Tag 自动构建。我们已完成免费开源代码签名所需的工程治理准备，一旦完成 SignPath Foundation 审查接入，Release 流水线将直接为二进制可执行文件附加可验证的 SignPath Foundation 开源签名。
 
 ## 代码签名工作流配置（预留）

@@ -11,7 +11,8 @@ public enum LogFatalityKind
 {
     Unknown = 0,
     Fatal,
-    NonFatalEnsure
+    NonFatalEnsure,
+    ChildProcessExit
 }
 
 public enum LogSignalId

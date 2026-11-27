@@ -218,7 +218,7 @@ public sealed class V02StandaloneLogAcceptanceTests
             var (mdSignal, pngSignal) = RenderBothShareOutputs(vm.CurrentReport!, ScrubContext.Empty, new ShareOptions(IncludeScrubbedErrorExcerpt: true));
             Assert.Contains("通用文本日志", mdSignal);
             Assert.Contains("VK_ERROR_DEVICE_LOST", mdSignal);
-            Assert.Contains("致命性未知", mdSignal);
+            Assert.Contains("进程退出未证实", mdSignal);
             Assert.True(pngSignal.Length > 1000);
 
             await vm.AttachManualLogFileAsync(cleanLog);
@@ -293,6 +293,71 @@ public sealed class V02StandaloneLogAcceptanceTests
             Assert.True(pngA.Length > 1000 && pngB.Length > 1000 && pngStandalone.Length > 1000);
             var hashAfter = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(logPath)));
             Assert.Equal(hashBefore, hashAfter);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Row6_StandaloneForeignLogAfterPriorHostScan_IsolatesLocalEnvironmentAndBackgroundEvents()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("gck_v02_row6_");
+        try
+        {
+            var comfyLog = Path.Combine(tempDir.FullName, "comfyui-cuda-oom.log");
+            File.WriteAllText(comfyLog, """
+                [2026-11-27 18:10:02.110] [info] Starting ComfyUI Desktop v0.4.2 on Windows
+                [2026-11-27 18:11:19.882] [error] torch.OutOfMemoryError: CUDA out of memory.
+                """);
+
+            var now = DateTimeOffset.UtcNow;
+            var req = new ScanRequest(now.AddHours(-2), now);
+            var ev = new EvidenceItem("ev-host", EvidenceSourceKind.WindowsApplicationCrash1000, now.AddMinutes(-3), "EventSystemTimeUtc", "App/1000/1", "1.0.0", new Dictionary<string, string>(), false);
+            var kpEv = new EvidenceItem("ev-kp", EvidenceSourceKind.WindowsKernelPower41, now.AddMinutes(-10), "EventSystemTimeUtc", "Sys/KP/41", "1.0.0", new Dictionary<string, string>(), false);
+            var hostInc = new CrashIncident("inc-host", IncidentAnchorKind.ApplicationCrash, now.AddMinutes(-3), "OtherGame.exe", @"D:\Games\OtherGame.exe", @"...\OtherGame.exe", "OtherGame.exe", null, "0xc0000005", "0x1", "0x1", null, null, true, false, true, 1, [now.AddMinutes(-3)], AttributionStrength.Unlinked, ev, null, [], null, []);
+            var kpBg = new BackgroundEventRecord(kpEv, AttributionStrength.NearbyOnly, "KernelPower41", 0);
+            var hostEnv = new EnvironmentSnapshot(
+                now,
+                [new GpuAdapterFact("TestHostGpu", "32.0.1.1", "2026-08-01", false)],
+                new TargetPathFact(false, false, false, null, null),
+                new OneDriveDocsFact(true, false, false, EnvironmentNoticeLevel.Info, "ok"),
+                new VcRuntimeFact(true, "14.51", true, "14.51", EnvironmentNoticeLevel.Info),
+                new PageFileFact(true, true, 0, 0, false, EnvironmentNoticeLevel.Attention, "disabled"),
+                new RunningOverlaysFact(true, ["Discord"], "now"),
+                new SystemLocaleAndSecurityFact("Windows 11", 26200, 16384, 936, false, true),
+                []);
+
+            var session = new ScanSessionResult(
+                false,
+                false,
+                false,
+                req,
+                new CorrelateResult([hostInc], 0, [kpBg], [ev, kpEv]),
+                [new SourceCoverage("Application", req.WindowStartUtc, req.WindowEndUtc, 1, false, SourceCoverageStatus.Ok, null)],
+                hostEnv,
+                []);
+
+            using var vm = new MainViewModel();
+            vm.LoadSessionForTest(session);
+            await vm.AttachManualLogFileAsync(comfyLog);
+            vm.ViewStandaloneLogCommand.Execute(null);
+
+            Assert.True(vm.IsViewingStandaloneLog);
+            Assert.NotNull(vm.CurrentReport);
+            Assert.Equal(ReportSubjectKind.StandaloneLogOnly, vm.CurrentReport!.SubjectKind);
+            Assert.Equal("已扫描，未关联", vm.CurrentReport.WindowsScanStateLabel);
+            Assert.Null(vm.CurrentReport.Environment);
+            Assert.Empty(vm.CurrentReport.SystemBackgroundEvents);
+
+            var (md, _) = RenderBothShareOutputs(vm.CurrentReport, ScrubContext.Empty, new ShareOptions(IncludeScrubbedErrorExcerpt: true));
+            Assert.Contains("已扫描，未关联", md);
+            Assert.DoesNotContain("TestHostGpu", md);
+            Assert.DoesNotContain("Kernel-Power 41", md);
+            Assert.DoesNotContain("虚拟内存页面文件", md);
+            Assert.DoesNotContain("系统托管页面文件", md);
+            Assert.DoesNotContain("OtherGame", md);
         }
         finally
         {
