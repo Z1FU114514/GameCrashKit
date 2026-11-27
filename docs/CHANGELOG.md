@@ -1,5 +1,13 @@
 # 更新日志 (Changelog)
 
+## [v0.2.0-alpha.3] - 2026-11-27
+
+对外推广前 P0/P1 红队复查整改版本（通过受保护 `main` Pull Request + 云端实包沙盒复测）：
+* **探测脚本硬校验与进程隔离（P0 + P1）**：`scripts/Test-FirstRunTrust.ps1` 在任何解压/解锁/启动前强制比对目标文件名与完整 64 位 SHA-256，校验缺失或失配立即失败终止（`0` 次启动）；停止进程仅限于脚本自身派生并登记句柄的测试实例，不再误杀已有应用会话或 `smartscreen.exe`，同时去除用户名与精确时钟输出。
+* **隐藏名称全字段生效（P1）**：`ShareReportProjector` 在勾选「隐藏程序名」后统一掩码独立日志格式标签与常见软件名（如 `OBS Studio` / `Blender` / `ComfyUI` / `Unity` / `Unreal`），摘要栏、规则标题与可选信号摘要均不再残留软件名。
+* **收紧主进程致命性升级（P1）**：新增 `LogFatalityKind.ChildProcessExit` 与更诚实的 `进程退出未证实` 状态；OBS 设备重建、ComfyUI/Blender GPU OOM 单独出现时不升级为主进程 `Fatal` 且不给出页面文件修改建议；ComfyUI `exited with code: 3221225477` 兼容冒号写法并严格标注为子进程异常退出；Blender 信号扫描同步剔除 `Stack trace:` / `# Python backtrace` 堆栈节并优先从 `ExceptionCode` 提取访问违规，避免堆栈内字符引发误报。
+* **独立日志严禁混入宿主机背景与环境（P1）**：`WindowsScanCoordinator` 在未显式关联 Windows 候选的独立日志模式下标注「已扫描，未关联」，不再将本机 7 项环境快照（如页面文件状态）或 `Kernel-Power 41` 系统背景事件带入他人或外部日志的诊断规则与导出卡。
+
 ## [v0.2.0-alpha.2] - 2026-11-27
 
 跨软件静态适配器扩展、首轮真实格式样本自测与首发可信度治理更新：

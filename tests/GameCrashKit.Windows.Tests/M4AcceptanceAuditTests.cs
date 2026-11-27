@@ -155,6 +155,60 @@ public sealed class M4AcceptanceAuditTests
         Assert.Equal(md1, md2);
     }
 
+    [Fact]
+    public void TestFirstRunTrustScript_AbortsWithZeroExtractionWhenSha256Mismatches()
+    {
+        var repoRoot = FindRepoRoot();
+        var scriptPath = Path.Combine(repoRoot, "scripts", "Test-FirstRunTrust.ps1");
+        Assert.True(File.Exists(scriptPath), $"Script missing: {scriptPath}");
+
+        var tempDir = Directory.CreateTempSubdirectory("gck_trust_mismatch_");
+        try
+        {
+            var zipPath = Path.Combine(tempDir.FullName, "GameCrashKit-v0.2.0-alpha.3-win-x64.zip");
+            File.WriteAllBytes(zipPath, [0x50, 0x4B, 0x05, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+            var badSumPath = Path.Combine(tempDir.FullName, "GameCrashKit-v0.2.0-alpha.3-win-x64.SHA256SUMS.txt");
+            File.WriteAllText(badSumPath, $"{new string('0', 64)}  GameCrashKit-v0.2.0-alpha.3-win-x64.zip\n");
+
+            var outputDir = Path.Combine(tempDir.FullName, "out");
+            var workDir = Path.Combine(tempDir.FullName, "work");
+
+            using var proc = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\" -VersionLabel \"v0.2.0-alpha.3\" -OutputDir \"{outputDir}\" -WorkDir \"{workDir}\" -LocalZipPath \"{zipPath}\" -LocalChecksumPath \"{badSumPath}\"",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            });
+            Assert.NotNull(proc);
+            Assert.True(proc!.WaitForExit(30_000));
+            Assert.NotEqual(0, proc.ExitCode);
+
+            var reportPath = Path.Combine(outputDir, "firstrun-trust-report.txt");
+            var flagPath = Path.Combine(outputDir, "firstrun-trust-done.flag");
+            Assert.True(File.Exists(reportPath));
+            Assert.True(File.Exists(flagPath));
+            Assert.StartsWith("FAIL ", File.ReadAllText(flagPath), StringComparison.Ordinal);
+
+            var report = File.ReadAllText(reportPath);
+            Assert.True(report.Contains("Match=False", StringComparison.Ordinal), $"Report missing Match=False:\n{report}");
+            Assert.DoesNotContain("User=", report, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain($@"Users\{System.Environment.UserName}", report, StringComparison.OrdinalIgnoreCase);
+            if (!"IsAdmin".Contains(System.Environment.UserName, StringComparison.OrdinalIgnoreCase))
+            {
+                Assert.DoesNotContain(System.Environment.UserName, report, StringComparison.OrdinalIgnoreCase);
+            }
+            Assert.False(Directory.Exists(Path.Combine(workDir, "extracted-explorer")));
+            Assert.False(Directory.Exists(Path.Combine(workDir, "extracted-pwsh")));
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
     private static void AssertNoForbiddenTokens(string directory, string[] forbiddenTokens)
     {
         Assert.True(Directory.Exists(directory), $"Directory not found: {directory}");

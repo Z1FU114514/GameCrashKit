@@ -82,8 +82,10 @@ public static class EngineLogParser
         ("EXCEPTION_ACCESS_VIOLATION", "EXCEPTION_ACCESS_VIOLATION"),
         ("Unhandled exception: c0000005", "0xc0000005 (Unhandled exception)"),
         ("Unhandled exception: 0xc0000005", "0xc0000005 (Unhandled exception)"),
-        ("exited with code 3221225477", "0xc0000005 (exit code 3221225477)"),
-        ("exited with code -1073741819", "0xc0000005 (exit code -1073741819)")
+        ("exited with code: 3221225477", "Python 子进程异常退出 0xc0000005 (exit code 3221225477)"),
+        ("exited with code 3221225477", "Python 子进程异常退出 0xc0000005 (exit code 3221225477)"),
+        ("exited with code: -1073741819", "Python 子进程异常退出 0xc0000005 (exit code -1073741819)"),
+        ("exited with code -1073741819", "Python 子进程异常退出 0xc0000005 (exit code -1073741819)")
     ];
 
     private static readonly string[] SignalLineKeywords =
@@ -137,11 +139,11 @@ public static class EngineLogParser
                     : "OBS Studio 日志",
             ExtractVersion: static lines => MatchFirstRegexGroup(lines, ObsVersionRegex, "ver"),
             ExtractRhi: ExtractCommonRhiFromLines,
-            ResolveFatality: static (lines, hasGpu, hasOom, hasAv) =>
-                (hasGpu || hasOom || hasAv || lines.Any(static l => l.Contains("Unhandled exception:", StringComparison.OrdinalIgnoreCase)))
+            ResolveFatality: static (lines, _, _, _) =>
+                lines.Any(static l => l.Contains("Unhandled exception:", StringComparison.OrdinalIgnoreCase))
                     ? LogFatalityKind.Fatal
                     : LogFatalityKind.Unknown,
-            ExcludeBacktraceFromExcerpts: false),
+            ExcludeBacktraceFromExcerpts: true),
         new StaticTextLogAdapter(
             Matches: static content =>
                 BlenderVersionRegex.IsMatch(content) &&
@@ -152,10 +154,10 @@ public static class EngineLogParser
             ResolveFormatLabel: static _ => "Blender 崩溃日志",
             ExtractVersion: static lines => MatchFirstRegexGroup(lines, BlenderVersionRegex, "ver"),
             ExtractRhi: ExtractCommonRhiFromLines,
-            ResolveFatality: static (lines, hasGpu, hasOom, hasAv) =>
-                (hasGpu || hasOom || hasAv || lines.Any(static l =>
+            ResolveFatality: static (lines, _, _, _) =>
+                lines.Any(static l =>
                     l.Contains("ExceptionCode", StringComparison.OrdinalIgnoreCase) ||
-                    l.Contains("Exception Record:", StringComparison.OrdinalIgnoreCase)))
+                    l.Contains("Exception Record:", StringComparison.OrdinalIgnoreCase))
                     ? LogFatalityKind.Fatal
                     : LogFatalityKind.Unknown,
             ExcludeBacktraceFromExcerpts: true),
@@ -170,8 +172,14 @@ public static class EngineLogParser
             ResolveFormatLabel: static _ => "ComfyUI 日志",
             ExtractVersion: static lines => MatchFirstRegexGroup(lines, ComfyVersionRegex, "ver"),
             ExtractRhi: static _ => null,
-            ResolveFatality: static (_, hasGpu, hasOom, hasAv) =>
-                (hasGpu || hasOom || hasAv) ? LogFatalityKind.Fatal : LogFatalityKind.Unknown,
+            ResolveFatality: static (lines, _, _, _) =>
+                lines.Any(static l =>
+                    l.Contains("Python process exited", StringComparison.OrdinalIgnoreCase) &&
+                    (l.Contains("3221225477", StringComparison.OrdinalIgnoreCase) ||
+                     l.Contains("-1073741819", StringComparison.OrdinalIgnoreCase) ||
+                     l.Contains("c0000005", StringComparison.OrdinalIgnoreCase)))
+                    ? LogFatalityKind.ChildProcessExit
+                    : LogFatalityKind.Unknown,
             ExcludeBacktraceFromExcerpts: false)
     ];
 
@@ -230,7 +238,7 @@ public static class EngineLogParser
         var (hasAv, avToken) = DetectFirstMappedToken(lines, AccessViolationTokens);
         var excerpts = ExtractSignalExcerptLines(lines);
         var hasCrashMarker = lines.Any(static l => l.Contains("Crash!!!", StringComparison.OrdinalIgnoreCase));
-        var fatality = (hasGpuLost || hasOom || hasAv || hasCrashMarker) ? LogFatalityKind.Fatal : LogFatalityKind.Unknown;
+        var fatality = hasCrashMarker ? LogFatalityKind.Fatal : LogFatalityKind.Unknown;
 
         var signals = BuildSignalMatches(hasGpuLost, gpuToken, hasOom, oomToken, hasAv, avToken);
 
@@ -365,23 +373,30 @@ public static class EngineLogParser
 
         var lines = SplitBoundedLines(content);
         var adapter = StaticCrossAppAdapters.FirstOrDefault(a => a.Matches(content));
-        var excerptLinesSource = adapter is { ExcludeBacktraceFromExcerpts: true }
+        var signalLinesSource = adapter is { ExcludeBacktraceFromExcerpts: true }
             ? FilterOutBacktraceSections(lines)
             : lines;
 
-        var (hasGpuLost, gpuToken) = DetectFirstToken(lines, GpuLostTokens);
-        var (hasOom, oomToken) = DetectFirstToken(lines, OomTokens);
-        var (hasAv, avToken) = DetectFirstMappedToken(lines, AccessViolationTokens);
-        var excerpts = ExtractSignalExcerptLines(excerptLinesSource);
+        var exceptionHeaderLines = signalLinesSource
+            .Where(static l => l.Contains("ExceptionCode", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var avLinesSource = exceptionHeaderLines.Count > 0
+            ? exceptionHeaderLines
+            : signalLinesSource;
+
+        var (hasGpuLost, gpuToken) = DetectFirstToken(signalLinesSource, GpuLostTokens);
+        var (hasOom, oomToken) = DetectFirstToken(signalLinesSource, OomTokens);
+        var (hasAv, avToken) = DetectFirstMappedToken(avLinesSource, AccessViolationTokens);
+        var excerpts = ExtractSignalExcerptLines(signalLinesSource);
 
         var signals = BuildSignalMatches(hasGpuLost, gpuToken, hasOom, oomToken, hasAv, avToken);
         var formatLabel = adapter is not null
             ? adapter.ResolveFormatLabel(content)
             : UserConfirmedEngineLog.GetFormatDisplayLabel(EngineLogKind.GenericManual);
         var engineVersion = adapter?.ExtractVersion(lines);
-        var rhiBackend = adapter?.ExtractRhi(lines);
+        var rhiBackend = adapter?.ExtractRhi(signalLinesSource);
         var fatality = adapter is not null
-            ? adapter.ResolveFatality(lines, hasGpuLost, hasOom, hasAv)
+            ? adapter.ResolveFatality(signalLinesSource, hasGpuLost, hasOom, hasAv)
             : LogFatalityKind.Unknown;
 
         return new UserConfirmedEngineLog(

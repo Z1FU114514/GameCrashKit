@@ -8,7 +8,7 @@ namespace GameCrashKit.Core.Rules;
 public sealed class DiagnosisRuleEngine
 {
     public const string ReportSchemaVersion = "1.0.0";
-    public const string RulesetVersion = "v0.2-alpha.2";
+    public const string RulesetVersion = "v0.2-alpha.3";
     public const int MaxPrimaryFindings = 3;
 
     private readonly IReadOnlyList<IDiagnosisRule> _rules;

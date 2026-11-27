@@ -1,6 +1,8 @@
 ﻿[CmdletBinding()]
 param(
-    [string]$VersionLabel = "v0.2.0-alpha.2"
+    [string]$VersionLabel = "v0.2.0-alpha.3",
+    [string]$SourceZipPath = "",
+    [string]$SourceChecksumPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -9,10 +11,13 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $publishRoot = Join-Path $repoRoot "publish"
 $zipName = "GameCrashKit-$VersionLabel-win-x64.zip"
 $sumName = "GameCrashKit-$VersionLabel-win-x64.SHA256SUMS.txt"
-$zipPath = Join-Path $publishRoot $zipName
-$sumPath = Join-Path $publishRoot $sumName
+$zipPath = if (-not [string]::IsNullOrWhiteSpace($SourceZipPath)) { $SourceZipPath } else { Join-Path $publishRoot $zipName }
+$sumPath = if (-not [string]::IsNullOrWhiteSpace($SourceChecksumPath)) { $SourceChecksumPath } else { Join-Path $publishRoot $sumName }
 
 if (-not (Test-Path $zipPath) -or -not (Test-Path $sumPath)) {
+    if (-not [string]::IsNullOrWhiteSpace($SourceZipPath) -or -not [string]::IsNullOrWhiteSpace($SourceChecksumPath)) {
+        throw "Specified SourceZipPath or SourceChecksumPath does not exist: Zip=$zipPath, Sum=$sumPath"
+    }
     Write-Host "Portable ZIP not found, invoking Publish-Portable.ps1..." -ForegroundColor Yellow
     & (Join-Path $PSScriptRoot "Publish-Portable.ps1") -VersionLabel $VersionLabel -SkipTests
     if ($LASTEXITCODE -ne 0) { throw "Publish-Portable.ps1 failed." }
@@ -50,8 +55,8 @@ dotnet publish (Join-Path $repoRoot "tests\SandboxAutoVerifier\SandboxAutoVerifi
     -o $verifierDir
 if ($LASTEXITCODE -ne 0) { throw "SandboxAutoVerifier publish failed with exit code $LASTEXITCODE" }
 
-Copy-Item $zipPath -Destination $inputDir -Force
-Copy-Item $sumPath -Destination $inputDir -Force
+Copy-Item $zipPath -Destination (Join-Path $inputDir $zipName) -Force
+Copy-Item $sumPath -Destination (Join-Path $inputDir $sumName) -Force
 Copy-Item (Join-Path $repoRoot "tests\Fixtures\EngineLogs\unity-player-gpu-lost.log") -Destination $fixturesDir -Force
 Copy-Item (Join-Path $repoRoot "tests\Fixtures\EngineLogs\unreal-crashcontext-oom.xml") -Destination $fixturesDir -Force
 

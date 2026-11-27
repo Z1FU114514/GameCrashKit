@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$VersionLabel = "v0.2.0-alpha.2",
+    [string]$VersionLabel = "v0.2.0-alpha.3",
     [string]$OutputDir = "",
     [string]$WorkDir = "",
     [string]$LocalZipPath = "",
@@ -9,7 +9,24 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
+
+function Get-Sha256HexLower([string]$filePath) {
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $fs = [System.IO.File]::OpenRead($filePath)
+        try {
+            $hashBytes = $sha.ComputeHash($fs)
+            return ([System.BitConverter]::ToString($hashBytes) -replace '-', '').ToLowerInvariant()
+        }
+        finally {
+            $fs.Dispose()
+        }
+    }
+    finally {
+        $sha.Dispose()
+    }
+}
 
 if ([string]::IsNullOrWhiteSpace($OutputDir)) {
     $OutputDir = Join-Path ([Environment]::GetFolderPath("Desktop")) "GCK-TrustOutput"
@@ -33,7 +50,17 @@ function Get-ZoneIdentifierSummary([string]$filePath) {
     }
     try {
         $zoneLines = Get-Content -Path $filePath -Stream "Zone.Identifier" -ErrorAction Stop
-        $joined = ($zoneLines | ForEach-Object { ($_ -replace "`0", "").Trim() } | Where-Object { $_ -ne "" }) -join " | "
+        $cleaned = foreach ($line in $zoneLines) {
+            $item = ($line -replace "`0", "").Trim()
+            if ($item -eq "") { continue }
+            if ($item -match '^ReferrerUrl=(?!https?://)') {
+                "ReferrerUrl=<local-archive>"
+            }
+            else {
+                $item
+            }
+        }
+        $joined = $cleaned -join " | "
         if ([string]::IsNullOrWhiteSpace($joined)) { return "EMPTY_ADS" }
         return $joined
     }
@@ -42,17 +69,36 @@ function Get-ZoneIdentifierSummary([string]$filePath) {
     }
 }
 
-function Stop-TestProcesses {
-    Get-Process -Name "GameCrashKit.App" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+$script:OwnedTestPids = New-Object System.Collections.Generic.HashSet[int]
+
+function Register-OwnedTestPid([int]$processId) {
+    if ($processId -gt 0) {
+        $null = $script:OwnedTestPids.Add($processId)
+    }
+}
+
+function Stop-OwnedTestProcesses {
+    foreach ($ownedPid in @($script:OwnedTestPids)) {
+        try {
+            $proc = Get-Process -Id $ownedPid -ErrorAction SilentlyContinue
+            if ($null -ne $proc -and $proc.ProcessName -eq "GameCrashKit.App") {
+                Stop-Process -Id $ownedPid -Force -ErrorAction SilentlyContinue
+            }
+        }
+        catch {
+            # Ignore already exited process
+        }
+        $null = $script:OwnedTestPids.Remove($ownedPid)
+    }
 }
 
 try {
     Record-Line "============================================================"
     Record-Line ("GameCrash Kit First-Run Trust & SmartScreen Probe | Target: " + $VersionLabel)
-    Record-Line ("TimestampLocal: " + [DateTimeOffset]::Now.ToString("yyyy-MM-dd HH:mm:ss zzz"))
+    Record-Line ("TimestampDate: " + [DateTimeOffset]::Now.ToString("yyyy-MM-dd"))
     Record-Line "============================================================"
 
-    # 1. OS & Standard User Environment
+    # 1. OS & Standard User Environment (never emit username or exact clock)
     $os = Get-CimInstance Win32_OperatingSystem
     $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
     $isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -63,7 +109,7 @@ try {
     $regPolicyLevel = (Get-ItemProperty "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System" -Name "ShellSmartScreenLevel" -ErrorAction SilentlyContinue).ShellSmartScreenLevel
     $regWebContent = (Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\AppHost" -Name "EnableWebContentEvaluation" -ErrorAction SilentlyContinue).EnableWebContentEvaluation
 
-    Record-Line ("[ENV] OS={0} (Build {1}) | UICulture={2} | User={3} | IsAdmin={4}" -f $os.Caption, $os.BuildNumber, $culture, [Environment]::UserName, $isAdmin)
+    Record-Line ("[ENV] OS={0} (Build {1}) | UICulture={2} | IsAdmin={3}" -f $os.Caption, $os.BuildNumber, $culture, $isAdmin)
     Record-Line ("[ENV] SmartScreenEnabled={0} | Policy.EnableSmartScreen={1} | Policy.Level={2} | AppHost.EnableWebContentEvaluation={3}" -f `
         $(if ($null -eq $regExplorer) { "<unset>" } else { $regExplorer }), `
         $(if ($null -eq $regPolicyEnable) { "<unset>" } else { $regPolicyEnable }), `
@@ -98,21 +144,36 @@ try {
                 Copy-Item -Path $LocalChecksumPath -Destination $sumPath -Force
             }
         }
-        Record-Line ("[DOWNLOAD] Using staged archive: " + $LocalZipPath)
+        Record-Line ("[DOWNLOAD] Using staged archive file: " + (Split-Path $LocalZipPath -Leaf))
     }
     else {
         throw "No ZIP source provided and -SkipDownload was specified."
     }
 
-    $actualHash = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
-    $zipSize = (Get-Item $zipPath).Length
-    if (Test-Path $sumPath) {
-        $expectedHash = ((Get-Content $sumPath -TotalCount 1).Trim() -split '\s+')[0].ToLowerInvariant()
-        $hashMatch = ($actualHash -eq $expectedHash)
-        Record-Line ("[SHA256] ZipBytes={0} | Actual={1} | Expected={2} | Match={3}" -f $zipSize, $actualHash, $expectedHash, $hashMatch)
+    # Strict hard gate BEFORE any extraction, MotW tagging, or launch
+    if (-not (Test-Path $sumPath)) {
+        Record-Line ("[SHA256] Checksum file missing: " + $sumName + " | Match=False")
+        throw ("Required SHA-256 checksum file missing: " + $sumPath)
     }
-    else {
-        Record-Line ("[SHA256] ZipBytes={0} | Actual={1} | Expected=<missing>" -f $zipSize, $actualHash)
+
+    $rawSumLine = (Get-Content $sumPath -ErrorAction Stop | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1)
+    if ([string]::IsNullOrWhiteSpace($rawSumLine) -or $rawSumLine.Trim() -notmatch '^(?<hash>[0-9a-fA-F]{64})\s+\*?(?<file>\S+)$') {
+        Record-Line "[SHA256] Malformed checksum line | Match=False"
+        throw "Checksum file format invalid (expected '<64-hex-sha256>  <filename>')."
+    }
+
+    $expectedHash = $Matches["hash"].ToLowerInvariant()
+    $expectedFile = Split-Path $Matches["file"] -Leaf
+    $actualHash = Get-Sha256HexLower $zipPath
+    $zipSize = (Get-Item $zipPath).Length
+    $fileMatch = [string]::Equals($expectedFile, $zipName, [System.StringComparison]::OrdinalIgnoreCase)
+    $hashMatch = $fileMatch -and ($actualHash -eq $expectedHash)
+
+    Record-Line ("[SHA256] ZipBytes={0} | TargetFile={1} | ExpectedFile={2} | Actual={3} | Expected={4} | Match={5}" -f `
+        $zipSize, $zipName, $expectedFile, $actualHash, $expectedHash, $hashMatch)
+
+    if (-not $hashMatch) {
+        throw "SHA-256 verification failed before extraction; aborting with zero launches."
     }
 
     # 3. Attach authentic Mark of the Web (Zone.Identifier ADS) onto the downloaded ZIP
@@ -171,14 +232,14 @@ try {
     $signerSubject = if ($null -ne $sig.SignerCertificate) { $sig.SignerCertificate.Subject } else { "<none>" }
     Record-Line ("[AUTHENTICODE] Status={0} | Signer={1}" -f $sig.Status, $signerSubject)
 
-    # 6. Non-blocking ShellExecute launch attempt under MotW (observes SmartScreen blocking without hanging)
-    Stop-TestProcesses
+    # 6. Non-blocking ShellExecute launch attempt under MotW (never kills SmartScreen or other user windows)
     $smartScreenBeforePids = @(Get-Process -Name "smartscreen" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id)
     $motwLaunchError = "None"
     $motwWindowReady = $false
     $motwExited = $false
     $motwExitCode = ""
     $motwShellBlockedOrPending = $false
+    $smartScreenStatus = "NotTriggered"
 
     $psRunner = [PowerShell]::Create()
     $null = $psRunner.AddScript({
@@ -195,10 +256,10 @@ try {
     $asyncResult = $psRunner.BeginInvoke()
     $completedInWindow = $asyncResult.AsyncWaitHandle.WaitOne(8000)
     $smartScreenDuringPids = @(Get-Process -Name "smartscreen" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id)
-    $liveAppDuring = @(Get-Process -Name "GameCrashKit.App" -ErrorAction SilentlyContinue).Count
 
     if (-not $completedInWindow) {
         $motwShellBlockedOrPending = $true
+        $smartScreenStatus = "WaitingForUser"
         $motwLaunchError = "ShellExecuteBlockedPendingSmartScreen(>8000ms)"
     }
     else {
@@ -209,7 +270,9 @@ try {
                 $motwLaunchError = ($errRec.Exception.GetType().Name + ": " + $errRec.Exception.Message).Replace("`r", " ").Replace("`n", " ")
             }
             elseif ($outItems.Count -gt 0 -and [int]$outItems[0] -gt 0) {
-                $motwProc = Get-Process -Id ([int]$outItems[0]) -ErrorAction SilentlyContinue
+                $motwPid = [int]$outItems[0]
+                Register-OwnedTestPid $motwPid
+                $motwProc = Get-Process -Id $motwPid -ErrorAction SilentlyContinue
                 for ($w = 0; $w -lt 12; $w++) {
                     Start-Sleep -Milliseconds 500
                     if ($null -ne $motwProc) {
@@ -231,17 +294,15 @@ try {
             $motwLaunchError = ($_.Exception.GetType().Name + ": " + $_.Exception.Message).Replace("`r", " ").Replace("`n", " ")
         }
         $smartScreenDuringPids = @(Get-Process -Name "smartscreen" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id)
-        $liveAppDuring = @(Get-Process -Name "GameCrashKit.App" -ErrorAction SilentlyContinue).Count
+        if ($smartScreenDuringPids.Count -gt $smartScreenBeforePids.Count) {
+            $smartScreenStatus = "Observed"
+        }
     }
 
-    $newSmartScreenPids = @($smartScreenDuringPids | Where-Object { $smartScreenBeforePids -notcontains $_ })
-    Record-Line ("[LAUNCH-MOTW] SmartScreenCountBefore={0} | SmartScreenCountDuring={1} | ShellBlockedPending={2} | AppProcessesDuring={3} | MainWindowReady={4} | Exited={5} | ExitCode={6} | Error={7}" -f `
-        $smartScreenBeforePids.Count, $smartScreenDuringPids.Count, $motwShellBlockedOrPending, $liveAppDuring, $motwWindowReady, $motwExited, $motwExitCode, $motwLaunchError)
+    Record-Line ("[LAUNCH-MOTW] SmartScreenCountBefore={0} | SmartScreenCountDuring={1} | SmartScreenStatus={2} | ShellBlockedPending={3} | MainWindowReady={4} | Exited={5} | ExitCode={6} | Error={7}" -f `
+        $smartScreenBeforePids.Count, $smartScreenDuringPids.Count, $smartScreenStatus, $motwShellBlockedOrPending, $motwWindowReady, $motwExited, $motwExitCode, $motwLaunchError)
 
-    Stop-TestProcesses
-    foreach ($ssPid in $newSmartScreenPids) {
-        Stop-Process -Id $ssPid -Force -ErrorAction SilentlyContinue
-    }
+    Stop-OwnedTestProcesses
     if ($completedInWindow) {
         $psRunner.Dispose()
     }
@@ -265,6 +326,7 @@ try {
     $psiUnblocked.UseShellExecute = $true
     $unblockedProc = [System.Diagnostics.Process]::Start($psiUnblocked)
     $unblockedPid = $unblockedProc.Id
+    Register-OwnedTestPid $unblockedPid
     for ($u = 0; $u -lt 20; $u++) {
         Start-Sleep -Milliseconds 500
         $unblockedProc.Refresh()
@@ -274,23 +336,23 @@ try {
             break
         }
     }
-    Record-Line ("[LAUNCH-UNBLOCKED] AppExeMotW={0} | PID={1} | MainWindowReady={2} | Exited={3}" -f `
-        $unblockedMotw, $unblockedPid, $unblockedReady, $unblockedProc.HasExited)
-    Stop-TestProcesses
+    Record-Line ("[LAUNCH-UNBLOCKED] AppExeMotW={0} | MainWindowReady={1} | Exited={2}" -f `
+        $unblockedMotw, $unblockedReady, $unblockedProc.HasExited)
+    Stop-OwnedTestProcesses
 
     $reportPath = Join-Path $OutputDir "firstrun-trust-report.txt"
     $flagPath = Join-Path $OutputDir "firstrun-trust-done.flag"
     [System.IO.File]::WriteAllLines($reportPath, $reportLines, (New-Object System.Text.UTF8Encoding($true)))
-    [System.IO.File]::WriteAllText($flagPath, ("DONE " + [DateTimeOffset]::Now.ToString("yyyy-MM-dd HH:mm:ss zzz") + "`r`n"), [System.Text.Encoding]::ASCII)
+    [System.IO.File]::WriteAllText($flagPath, ("DONE " + [DateTimeOffset]::Now.ToString("yyyy-MM-dd") + "`r`n"), [System.Text.Encoding]::ASCII)
     [Environment]::Exit(0)
 }
 catch {
-    $errMsg = $_.Exception.ToString()
+    $errMsg = $_.Exception.Message
     Record-Line ("[FAIL] " + $errMsg)
     $reportPath = Join-Path $OutputDir "firstrun-trust-report.txt"
     $flagPath = Join-Path $OutputDir "firstrun-trust-done.flag"
     [System.IO.File]::WriteAllLines($reportPath, $reportLines, (New-Object System.Text.UTF8Encoding($true)))
-    [System.IO.File]::WriteAllText($flagPath, ("FAIL " + [DateTimeOffset]::Now.ToString("yyyy-MM-dd HH:mm:ss zzz") + "`r`n"), [System.Text.Encoding]::ASCII)
-    Stop-TestProcesses
-    exit 1
+    [System.IO.File]::WriteAllText($flagPath, ("FAIL " + [DateTimeOffset]::Now.ToString("yyyy-MM-dd") + "`r`n"), [System.Text.Encoding]::ASCII)
+    Stop-OwnedTestProcesses
+    [Environment]::Exit(1)
 }
