@@ -304,7 +304,7 @@ public static partial class ShareReportProjector
             _ => "未标明"
         };
 
-        var header = $"日志类型: {log.Kind} | 致命性: {fatalityLabel}";
+        var header = $"日志类型: {log.EffectiveFormatLabel} | 致命性: {fatalityLabel}";
         if (safeVersion is not null)
         {
             header += $" | 规范版本号: {safeVersion}";
@@ -317,19 +317,22 @@ public static partial class ShareReportProjector
             lines.Add($"图形渲染后端 (RHI): {safeRhi}");
         }
 
-        if (log.HasGpuDeviceLostSignal)
+        var effectiveSignals = log.EffectiveSignals;
+        foreach (var sig in effectiveSignals)
         {
-            lines.Add($"命中固定图形错误标记: {log.GpuLostToken ?? "GPU_DEVICE_LOST"}");
+            var label = sig.SignalId switch
+            {
+                LogSignalId.GpuDeviceLost => "命中固定图形错误标记",
+                LogSignalId.OutOfMemory => "命中固定资源不足标记",
+                LogSignalId.AccessViolation => "命中固定内存访问异常标记",
+                _ => "命中固定错误标记"
+            };
+            lines.Add($"{label}: {sig.MatchedToken}");
         }
 
-        if (log.HasOutOfMemorySignal)
+        if (effectiveSignals.Count == 0)
         {
-            lines.Add($"命中固定资源不足标记: {log.OomToken ?? "OUT_OF_MEMORY"}");
-        }
-
-        if (!log.HasGpuDeviceLostSignal && !log.HasOutOfMemorySignal)
-        {
-            lines.Add("固定错误标记扫描: 未命中已知图形丢失或资源耗尽固定标记（原始日志全文限本机查看）");
+            lines.Add("固定错误标记扫描: 未命中已知图形丢失、资源耗尽或内存访问异常固定标记（原始日志全文限本机查看）");
         }
 
         if (log.IsTruncated || log.MayBeOverwritten)

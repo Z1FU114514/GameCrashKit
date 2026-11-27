@@ -17,7 +17,8 @@ public enum LogFatalityKind
 public enum LogSignalId
 {
     GpuDeviceLost = 0,
-    OutOfMemory
+    OutOfMemory,
+    AccessViolation
 }
 
 public sealed record LogSignalMatch(

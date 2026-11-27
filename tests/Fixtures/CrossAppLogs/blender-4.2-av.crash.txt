@@ -1,0 +1,21 @@
+# Blender 4.2.0, Commit date: 2024-07-16 06:20, Hash a9326cb1a8cb
+# backtrace
+Exception Record:
+
+ExceptionCode         : EXCEPTION_ACCESS_VIOLATION
+Exception Address     : 0x00007FF72DAB7453
+Exception Module      : blender.exe
+Exception Flags       : 0x00000000
+Exception Parameters  : 0x2
+	Parameters[0] : 0x0000000000000000
+	Parameters[1] : 0x0000000000000000
+
+Stack trace:
+blender.exe         :0x00007FF72DAB7400  file_execute_get_description
+blender.exe         :0x00007FF72CA96A30  WM_operatortype_description
+KERNEL32.DLL        :0x00007FF846027340  BaseThreadInitThunk
+ntdll.dll           :0x00007FF847A7CC60  RtlUserThreadStart
+
+# Python backtrace:
+  File "C:\Users\SecretArtist\AppData\Roaming\Blender Foundation\Blender\4.2\scripts\addons\my_private_addon.py", line 42, in execute
+    raise RuntimeError("addon error path on host X token='obs_secret_tok' 192.168.1.55")

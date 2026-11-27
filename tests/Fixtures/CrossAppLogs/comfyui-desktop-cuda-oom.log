@@ -1,0 +1,4 @@
+[2026-11-27 18:10:02.110] [info] Starting ComfyUI Desktop v0.4.2 on Windows
+[2026-11-27 18:10:03.400] [info] Models directory: C:\Users\SecretDev\Documents\ComfyUI\models --api-key=secret_comfy_key host X 192.168.1.55
+[2026-11-27 18:10:05.010] [info] Total VRAM 8192 MB, total RAM 32768 MB
+[2026-11-27 18:11:19.882] [error] !!! Exception during processing !!! torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 2.00 GiB. GPU 0 has a total capacity of 8.00 GiB of which 124.00 MiB is free.

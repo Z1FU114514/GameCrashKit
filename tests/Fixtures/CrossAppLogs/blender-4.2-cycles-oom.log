@@ -1,0 +1,5 @@
+# Blender 4.2.0, Commit date: 2024-07-16 06:20, Hash a9326cb1a8cb
+I1127 16:04:10.100000 12340 device.cpp:42] Initializing Cycles Vulkan / CUDA device on host X
+I1127 16:04:12.220000 12340 scene.cpp:88] Loading scene C:\Users\SecretArtist\Projects\SecretClientScene.blend (192.168.1.55)
+E1127 16:04:19.512000 12340 device_impl.cpp:811] CUDA error: Out of memory in cuMemAlloc(&device_pointer, size)
+E1127 16:04:19.512500 12340 session.cpp:209] System is out of GPU and shared host memory

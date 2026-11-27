@@ -1,0 +1,12 @@
+14:20:01.102: CPU Name: AMD Ryzen 7 7800X3D 8-Core Processor
+14:20:01.104: Physical Memory: 32768MB Total, 22410MB Free
+14:20:01.105: Windows Version: 10.0 Build 26100 (release: 24H2; revision: 9457; 64-bit)
+14:20:01.110: OBS 30.2.3 (64-bit, windows)
+14:20:01.112: Initializing D3D11...
+14:20:01.114: Available Video Adapters:
+14:20:01.115: 	Adapter 0: NVIDIA GeForce RTX 5060
+14:20:01.120: Loading up D3D11 on adapter NVIDIA GeForce RTX 5060 (0)
+14:20:01.240: Recording path: C:\Users\SecretStreamer\Videos on host X token='obs_secret_tok' 192.168.1.55
+14:22:18.104: device_texture_create (D3D11): Failed to create 2D texture (887A0005)
+14:22:18.105: Device Remove/Reset!  Rebuilding all assets...
+14:22:18.120: Number of memory leaks: 0

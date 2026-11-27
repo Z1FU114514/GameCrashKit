@@ -683,7 +683,7 @@ public static class BuiltinRules
                 RuleId: RuleId,
                 RuleVersion: RuleVersion,
                 Title: $"仅手选日志诊断：{formatLabel}（已读取，未命中已知标记）",
-                Statement: "已安全只读检查该文件内容，但未在其中命中已知的图形设备丢失或资源耗尽固定标记（当前仅依据手选文本状态出具最小报告）。",
+                Statement: "已安全只读检查该文件内容，但未在其中命中已知的图形、资源耗尽或内存访问异常固定标记（当前仅依据手选文本状态出具最小报告）。",
                 Attribution: AttributionStrength.UserSelected,
                 EvidenceStrength: EvidenceStrength.Insufficient,
                 EvidenceIds: [$"engine-log:{log.Kind}"],

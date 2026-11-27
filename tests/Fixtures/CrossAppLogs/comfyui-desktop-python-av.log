@@ -1,0 +1,4 @@
+[2026-11-27 18:15:33.012] [info] Starting ComfyUI server from C:\Users\SecretDev\AppData\Local\Programs\@comfyorgcomfyui-electron on host X 192.168.1.55
+[2026-11-27 18:15:33.900] [info] Total VRAM 8192 MB, total RAM 32768 MB
+[2026-11-27 18:15:35.412] [error] Python process exited with code 3221225477
+[2026-11-27 18:15:35.415] [error] ComfyUI backend terminated unexpectedly --api-key=secret_comfy_key

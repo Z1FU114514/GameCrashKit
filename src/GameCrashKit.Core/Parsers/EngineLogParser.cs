@@ -29,6 +29,21 @@ public static class EngineLogParser
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         RegexTimeout);
 
+    private static readonly Regex ObsVersionRegex = new(
+        @"\bOBS\s+(?<ver>\d+\.\d+(?:\.\d+)?)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+        RegexTimeout);
+
+    private static readonly Regex BlenderVersionRegex = new(
+        @"(?:#\s*)?Blender\s+(?<ver>\d+\.\d+(?:\.\d+)?)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+        RegexTimeout);
+
+    private static readonly Regex ComfyVersionRegex = new(
+        @"ComfyUI Desktop\s+v?(?<ver>\d+\.\d+(?:\.\d+)?)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+        RegexTimeout);
+
     private static readonly string[] GpuLostTokens =
     [
         "DXGI_ERROR_DEVICE_REMOVED",
@@ -37,9 +52,14 @@ public static class EngineLogParser
         "0x887A0005",
         "0x887A0006",
         "0x887A0007",
+        "(887A0005)",
+        "(887A0006)",
+        "(887A0007)",
+        "Device Remove/Reset!",
         "VK_ERROR_DEVICE_LOST",
         "GPU Crash dump Triggered",
-        "D3D device being lost"
+        "D3D device being lost",
+        "CUDA_ERROR_LAUNCH_FAILED"
     ];
 
     private static readonly string[] OomTokens =
@@ -48,7 +68,22 @@ public static class EngineLogParser
         "Ran out of memory",
         "Could not allocate memory",
         "E_OUTOFMEMORY",
-        "VK_ERROR_OUT_OF_DEVICE_MEMORY"
+        "VK_ERROR_OUT_OF_DEVICE_MEMORY",
+        "CUDA out of memory",
+        "torch.OutOfMemoryError",
+        "torch.cuda.OutOfMemoryError",
+        "System is out of GPU and shared host memory",
+        "CUDA error: Out of memory",
+        "HIP out of memory"
+    ];
+
+    private static readonly (string Pattern, string CanonicalToken)[] AccessViolationTokens =
+    [
+        ("EXCEPTION_ACCESS_VIOLATION", "EXCEPTION_ACCESS_VIOLATION"),
+        ("Unhandled exception: c0000005", "0xc0000005 (Unhandled exception)"),
+        ("Unhandled exception: 0xc0000005", "0xc0000005 (Unhandled exception)"),
+        ("exited with code 3221225477", "0xc0000005 (exit code 3221225477)"),
+        ("exited with code -1073741819", "0xc0000005 (exit code -1073741819)")
     ];
 
     private static readonly string[] SignalLineKeywords =
@@ -56,16 +91,88 @@ public static class EngineLogParser
         "DXGI_ERROR_",
         "VK_ERROR_",
         "0x887A",
+        "887A0005",
+        "887A0006",
+        "887A0007",
+        "Device Remove/Reset",
         "Out of video memory",
         "Ran out of memory",
         "Could not allocate memory",
         "E_OUTOFMEMORY",
+        "CUDA out of memory",
+        "torch.OutOfMemoryError",
+        "CUDA error: Out of memory",
+        "System is out of GPU and shared host memory",
+        "HIP out of memory",
+        "EXCEPTION_ACCESS_VIOLATION",
+        "Unhandled exception",
+        "exited with code 3221225477",
+        "exited with code -1073741819",
         "GPU Crash dump Triggered",
         "D3D device being lost",
         "Crash!!!",
         "Fatal",
         "Exception",
         "Error"
+    ];
+
+    private sealed record StaticTextLogAdapter(
+        Func<string, bool> Matches,
+        Func<string, string> ResolveFormatLabel,
+        Func<IReadOnlyList<string>, string?> ExtractVersion,
+        Func<IReadOnlyList<string>, string?> ExtractRhi,
+        Func<IReadOnlyList<string>, bool, bool, bool, LogFatalityKind> ResolveFatality,
+        bool ExcludeBacktraceFromExcerpts);
+
+    private static readonly IReadOnlyList<StaticTextLogAdapter> StaticCrossAppAdapters =
+    [
+        new StaticTextLogAdapter(
+            Matches: static content =>
+                ObsVersionRegex.IsMatch(content) ||
+                (content.Contains("obs64.exe", StringComparison.OrdinalIgnoreCase) &&
+                 content.Contains("Unhandled exception:", StringComparison.OrdinalIgnoreCase)),
+            ResolveFormatLabel: static content =>
+                content.Contains("Unhandled exception:", StringComparison.OrdinalIgnoreCase)
+                    ? "OBS Studio 崩溃日志"
+                    : "OBS Studio 日志",
+            ExtractVersion: static lines => MatchFirstRegexGroup(lines, ObsVersionRegex, "ver"),
+            ExtractRhi: ExtractCommonRhiFromLines,
+            ResolveFatality: static (lines, hasGpu, hasOom, hasAv) =>
+                (hasGpu || hasOom || hasAv || lines.Any(static l => l.Contains("Unhandled exception:", StringComparison.OrdinalIgnoreCase)))
+                    ? LogFatalityKind.Fatal
+                    : LogFatalityKind.Unknown,
+            ExcludeBacktraceFromExcerpts: false),
+        new StaticTextLogAdapter(
+            Matches: static content =>
+                BlenderVersionRegex.IsMatch(content) &&
+                (content.Contains("# Blender", StringComparison.OrdinalIgnoreCase) ||
+                 content.Contains("ExceptionCode", StringComparison.OrdinalIgnoreCase) ||
+                 content.Contains("Cycles", StringComparison.OrdinalIgnoreCase) ||
+                 content.Contains("# backtrace", StringComparison.OrdinalIgnoreCase)),
+            ResolveFormatLabel: static _ => "Blender 崩溃日志",
+            ExtractVersion: static lines => MatchFirstRegexGroup(lines, BlenderVersionRegex, "ver"),
+            ExtractRhi: ExtractCommonRhiFromLines,
+            ResolveFatality: static (lines, hasGpu, hasOom, hasAv) =>
+                (hasGpu || hasOom || hasAv || lines.Any(static l =>
+                    l.Contains("ExceptionCode", StringComparison.OrdinalIgnoreCase) ||
+                    l.Contains("Exception Record:", StringComparison.OrdinalIgnoreCase)))
+                    ? LogFatalityKind.Fatal
+                    : LogFatalityKind.Unknown,
+            ExcludeBacktraceFromExcerpts: true),
+        new StaticTextLogAdapter(
+            Matches: static content =>
+                content.Contains("ComfyUI Desktop", StringComparison.OrdinalIgnoreCase) ||
+                content.Contains("Starting ComfyUI server", StringComparison.OrdinalIgnoreCase) ||
+                (content.Contains("ComfyUI", StringComparison.OrdinalIgnoreCase) &&
+                 (content.Contains("Total VRAM", StringComparison.OrdinalIgnoreCase) ||
+                  content.Contains("torch.", StringComparison.OrdinalIgnoreCase) ||
+                  content.Contains("Python process exited", StringComparison.OrdinalIgnoreCase))),
+            ResolveFormatLabel: static _ => "ComfyUI 日志",
+            ExtractVersion: static lines => MatchFirstRegexGroup(lines, ComfyVersionRegex, "ver"),
+            ExtractRhi: static _ => null,
+            ResolveFatality: static (_, hasGpu, hasOom, hasAv) =>
+                (hasGpu || hasOom || hasAv) ? LogFatalityKind.Fatal : LogFatalityKind.Unknown,
+            ExcludeBacktraceFromExcerpts: false)
     ];
 
     private static readonly XmlReaderSettings SafeXmlSettings = new()
@@ -120,11 +227,12 @@ public static class EngineLogParser
 
         var (hasGpuLost, gpuToken) = DetectFirstToken(lines, GpuLostTokens);
         var (hasOom, oomToken) = DetectFirstToken(lines, OomTokens);
+        var (hasAv, avToken) = DetectFirstMappedToken(lines, AccessViolationTokens);
         var excerpts = ExtractSignalExcerptLines(lines);
         var hasCrashMarker = lines.Any(static l => l.Contains("Crash!!!", StringComparison.OrdinalIgnoreCase));
-        var fatality = (hasGpuLost || hasOom || hasCrashMarker) ? LogFatalityKind.Fatal : LogFatalityKind.Unknown;
+        var fatality = (hasGpuLost || hasOom || hasAv || hasCrashMarker) ? LogFatalityKind.Fatal : LogFatalityKind.Unknown;
 
-        var signals = BuildSignalMatches(hasGpuLost, gpuToken, hasOom, oomToken);
+        var signals = BuildSignalMatches(hasGpuLost, gpuToken, hasOom, oomToken, hasAv, avToken);
 
         return new UserConfirmedEngineLog(
             Kind: EngineLogKind.Unity,
@@ -200,10 +308,11 @@ public static class EngineLogParser
 
         var (hasGpuLost, gpuToken) = DetectFirstToken(candidateLines, GpuLostTokens);
         var (hasOom, oomToken) = DetectFirstToken(candidateLines, OomTokens);
+        var (hasAv, avToken) = DetectFirstMappedToken(candidateLines, AccessViolationTokens);
 
         var fatality = isEnsure
             ? LogFatalityKind.NonFatalEnsure
-            : (!string.IsNullOrWhiteSpace(crashType) || !string.IsNullOrWhiteSpace(errorMessage) || hasGpuLost || hasOom)
+            : (!string.IsNullOrWhiteSpace(crashType) || !string.IsNullOrWhiteSpace(errorMessage) || hasGpuLost || hasOom || hasAv)
                 ? LogFatalityKind.Fatal
                 : LogFatalityKind.Unknown;
 
@@ -212,7 +321,7 @@ public static class EngineLogParser
             : candidateLines;
         var excerpts = BuildCappedExcerpts(excerptSource);
 
-        var signals = BuildSignalMatches(hasGpuLost, gpuToken, hasOom, oomToken);
+        var signals = BuildSignalMatches(hasGpuLost, gpuToken, hasOom, oomToken, hasAv, avToken);
 
         return new UserConfirmedEngineLog(
             Kind: EngineLogKind.Unreal,
@@ -255,11 +364,25 @@ public static class EngineLogParser
         }
 
         var lines = SplitBoundedLines(content);
+        var adapter = StaticCrossAppAdapters.FirstOrDefault(a => a.Matches(content));
+        var excerptLinesSource = adapter is { ExcludeBacktraceFromExcerpts: true }
+            ? FilterOutBacktraceSections(lines)
+            : lines;
+
         var (hasGpuLost, gpuToken) = DetectFirstToken(lines, GpuLostTokens);
         var (hasOom, oomToken) = DetectFirstToken(lines, OomTokens);
-        var excerpts = ExtractSignalExcerptLines(lines);
+        var (hasAv, avToken) = DetectFirstMappedToken(lines, AccessViolationTokens);
+        var excerpts = ExtractSignalExcerptLines(excerptLinesSource);
 
-        var signals = BuildSignalMatches(hasGpuLost, gpuToken, hasOom, oomToken);
+        var signals = BuildSignalMatches(hasGpuLost, gpuToken, hasOom, oomToken, hasAv, avToken);
+        var formatLabel = adapter is not null
+            ? adapter.ResolveFormatLabel(content)
+            : UserConfirmedEngineLog.GetFormatDisplayLabel(EngineLogKind.GenericManual);
+        var engineVersion = adapter?.ExtractVersion(lines);
+        var rhiBackend = adapter?.ExtractRhi(lines);
+        var fatality = adapter is not null
+            ? adapter.ResolveFatality(lines, hasGpuLost, hasOom, hasAv)
+            : LogFatalityKind.Unknown;
 
         return new UserConfirmedEngineLog(
             Kind: EngineLogKind.GenericManual,
@@ -268,25 +391,27 @@ public static class EngineLogParser
             FileLastWriteUtc: lastWriteUtc,
             IsTruncated: isTruncated,
             MayBeOverwritten: mayBeOverwritten,
-            EngineVersion: null,
-            RhiBackend: null,
+            EngineVersion: engineVersion,
+            RhiBackend: rhiBackend,
             HasGpuDeviceLostSignal: hasGpuLost,
             GpuLostToken: gpuToken,
             HasOutOfMemorySignal: hasOom,
             OomToken: oomToken,
             RawErrorExcerptLines: excerpts,
-            Fatality: LogFatalityKind.Unknown,
+            Fatality: fatality,
             Signals: signals,
-            FormatDisplayLabel: UserConfirmedEngineLog.GetFormatDisplayLabel(EngineLogKind.GenericManual));
+            FormatDisplayLabel: formatLabel);
     }
 
     private static IReadOnlyList<LogSignalMatch> BuildSignalMatches(
         bool hasGpuLost,
         string? gpuToken,
         bool hasOom,
-        string? oomToken)
+        string? oomToken,
+        bool hasAv,
+        string? avToken)
     {
-        var list = new List<LogSignalMatch>(2);
+        var list = new List<LogSignalMatch>(3);
         if (hasGpuLost)
         {
             list.Add(new LogSignalMatch(LogSignalId.GpuDeviceLost, gpuToken ?? "GPU_DEVICE_LOST"));
@@ -297,7 +422,93 @@ public static class EngineLogParser
             list.Add(new LogSignalMatch(LogSignalId.OutOfMemory, oomToken ?? "OUT_OF_MEMORY"));
         }
 
+        if (hasAv)
+        {
+            list.Add(new LogSignalMatch(LogSignalId.AccessViolation, avToken ?? "0xc0000005"));
+        }
+
         return list;
+    }
+
+    private static (bool Found, string? Token) DetectFirstMappedToken(
+        IReadOnlyList<string> lines,
+        (string Pattern, string CanonicalToken)[] tokens)
+    {
+        foreach (var (pattern, canonicalToken) in tokens)
+        {
+            foreach (var line in lines)
+            {
+                if (line.Contains(pattern, StringComparison.OrdinalIgnoreCase))
+                {
+                    return (true, canonicalToken);
+                }
+            }
+        }
+
+        return (false, null);
+    }
+
+    private static string? MatchFirstRegexGroup(IReadOnlyList<string> lines, Regex regex, string groupName)
+    {
+        foreach (var line in lines)
+        {
+            var m = regex.Match(line);
+            if (m.Success)
+            {
+                var value = m.Groups[groupName].Value.Trim();
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    return value;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static string? ExtractCommonRhiFromLines(IReadOnlyList<string> lines)
+    {
+        foreach (var line in lines)
+        {
+            if (line.Contains("Direct3D 12", StringComparison.OrdinalIgnoreCase) || line.Contains("D3D12", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Direct3D 12";
+            }
+
+            if (line.Contains("Direct3D 11", StringComparison.OrdinalIgnoreCase) || line.Contains("D3D11", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Direct3D 11";
+            }
+
+            if (line.Contains("Vulkan", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Vulkan";
+            }
+
+            if (line.Contains("OpenGL", StringComparison.OrdinalIgnoreCase))
+            {
+                return "OpenGL";
+            }
+        }
+
+        return null;
+    }
+
+    private static List<string> FilterOutBacktraceSections(IReadOnlyList<string> lines)
+    {
+        var filtered = new List<string>(lines.Count);
+        foreach (var line in lines)
+        {
+            if (line.StartsWith("Stack trace:", StringComparison.OrdinalIgnoreCase) ||
+                line.StartsWith("# Python backtrace", StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+
+            filtered.Add(line);
+        }
+
+        return filtered;
     }
 
     private static List<string> SplitBoundedLines(string content)

@@ -27,6 +27,7 @@ Thumbs.db
 Desktop.ini
 .DS_Store
 *.log
+!tests/Fixtures/**/*.log
 !tests/Fixtures/EngineLogs/unity-player-gpu-lost.log
 *.tmp
 *.dmp
